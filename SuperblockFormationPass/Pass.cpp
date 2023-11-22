@@ -32,9 +32,12 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         llvm::LoopAnalysis::Result &li = FAM.getResult<LoopAnalysis>(F);
 
         for (Loop *L : li) {
+            //This only gets each top level loop. I then need to use LoopNest class to get each nested loop. 
             BasicBlock *header = L->getHeader();
             BasicBlock *latch = L->getLoopLatch();
             BasicBlock *preheader = L->getLoopPreheader();
+
+            errs() << "header of loop: " << header << "\n";
         }
 
 
@@ -53,7 +56,7 @@ extern "C" ::llvm::PassPluginLibraryInfo LLVM_ATTRIBUTE_WEAK llvmGetPassPluginIn
             PB.registerPipelineParsingCallback(
                 [](StringRef Name, FunctionPassManager &FPM,
                 ArrayRef<PassBuilder::PipelineElement>) {
-                    if(Name == "func-name"){
+                    if(Name == "superblock_pass"){
                         FPM.addPass(SuperblockFormationPass());
                         return true;
                     }
