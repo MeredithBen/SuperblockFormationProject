@@ -5,7 +5,6 @@
 
 #include "llvm/Analysis/BlockFrequencyInfo.h"
 #include "llvm/Analysis/BranchProbabilityInfo.h"
-#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/LoopIterator.h"
 #include "llvm/Analysis/LoopPass.h"
 #include "llvm/IR/CFG.h"
@@ -17,6 +16,10 @@
 #include "llvm/Transforms/Utils/LoopUtils.h"
 #include "llvm/IR/Use.h"
 #include "llvm/IR/User.h"
+
+#include "llvm/Analysis/LoopNestAnalysis.h"
+#include "llvm/Analysis/ScalarEvolution.h"
+#include "llvm/Analysis/LoopInfo.h"
 
 #include <iostream>
 
@@ -30,14 +33,30 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         llvm::BlockFrequencyAnalysis::Result &bfi = FAM.getResult<BlockFrequencyAnalysis>(F);
         llvm::BranchProbabilityAnalysis::Result &bpi = FAM.getResult<BranchProbabilityAnalysis>(F);
         llvm::LoopAnalysis::Result &li = FAM.getResult<LoopAnalysis>(F);
+        //llvm::LoopNestAnalysis::Result &lni = FAM.getResult<LoopNestAnalysis>(F);
 
-        for (Loop *L : li) {
+        for (Loop* L : li) {
             //This only gets each top level loop. I then need to use LoopNest class to get each nested loop. 
+                // Try to use LoopNest class rather than LoopNestAnalysis pass bc the latter requires LoopAnalysisManager
+                // Nvm! The loop depth info is somehow contained in the loop object, just need to access it
             BasicBlock *header = L->getHeader();
             BasicBlock *latch = L->getLoopLatch();
             BasicBlock *preheader = L->getLoopPreheader();
 
-            errs() << "header of loop: " << header << "\n";
+            //std::unique_ptr<LoopNest>tempNest = &L->getLoopNest();
+            errs() << "Loop nest object: " << *L << "\n";
+            errs() << "Loop nest header: " << *header << "\n";
+            for (Loop* loop_obj : *L){
+                errs() << "Loop object: " << *loop_obj << "\n";
+                errs() << "Loop header: " << *loop_obj->getHeader() << "\n";
+            }
+            
+            while (//stack is not empty){
+                // pop the top of the stack and set that to be current loop (initialize stack with all top level loops from LoopInfo)
+                // for each top level loop in the loop you are currently visiting, add the loop object to a stack.
+                //for each loop being visited, add the loop object to an array along with the depth
+                    
+            }
         }
 
 
