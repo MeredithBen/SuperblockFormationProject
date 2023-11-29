@@ -34,34 +34,57 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         llvm::BranchProbabilityAnalysis::Result &bpi = FAM.getResult<BranchProbabilityAnalysis>(F);
         llvm::LoopAnalysis::Result &li = FAM.getResult<LoopAnalysis>(F);
         //llvm::LoopNestAnalysis::Result &lni = FAM.getResult<LoopNestAnalysis>(F);
+        
 
+        // set up the lists and initialize them with top level loops in program
+        std::list<Loop*> bfs_loops;
+        std::list<Loop*> least_to_most_nested;
         for (Loop* L : li) {
-            //This only gets each top level loop. I then need to use LoopNest class to get each nested loop. 
-                // Try to use LoopNest class rather than LoopNestAnalysis pass bc the latter requires LoopAnalysisManager
-                // Nvm! The loop depth info is somehow contained in the loop object, just need to access it
-            BasicBlock *header = L->getHeader();
-            BasicBlock *latch = L->getLoopLatch();
-            BasicBlock *preheader = L->getLoopPreheader();
+            errs() << "top level loop: " << *L << "\n";
+            bfs_loops.push_back(L);
+            least_to_most_nested.push_back(L);
+        }
 
-            //std::unique_ptr<LoopNest>tempNest = &L->getLoopNest();
-            errs() << "Loop nest object: " << *L << "\n";
-            errs() << "Loop nest header: " << *header << "\n";
-            for (Loop* loop_obj : *L){
-                errs() << "Loop object: " << *loop_obj << "\n";
-                errs() << "Loop header: " << *loop_obj->getHeader() << "\n";
-            }
-            
-            while (//stack is not empty){
-                // pop the top of the stack and set that to be current loop (initialize stack with all top level loops from LoopInfo)
-                // for each top level loop in the loop you are currently visiting, add the loop object to a stack.
-                //for each loop being visited, add the loop object to an array along with the depth
-                    
+        // now go through each loop in program in breadth-first order and add them to least_to_most_list
+        Loop* current_loop;
+        while (!bfs_loops.empty()){
+            // pop the top of the queue and set that to be current loop (initialize stack with all top level loops from LoopInfo)
+            current_loop = bfs_loops.front();
+            bfs_loops.pop_front();
+            // for each top level loop in the loop you are currently visiting, add the loop object to a stack.
+                // also add the loop along with the depth to a list to be used later
+            for (Loop *SL : current_loop->getSubLoops()) {
+                errs() << "subloop: " << *SL << "\n";
+                bfs_loops.push_back(SL);
+                least_to_most_nested.push_back(SL);
             }
         }
 
+        //sanity check: print out loop depth to check they were ordered correctly. 
+        for (Loop* temp_loop : least_to_most_nested){
+            errs() << "Loop depth: " << temp_loop->getLoopDepth() << "\n";
+        }
+
+        //to iterate through the list in most-nested order, access the back element of list and then pop it off.
 
 
+        // This only gets each top level loop. I then need to use LoopNest class to get each nested loop. 
+        //     Try to use LoopNest class rather than LoopNestAnalysis pass bc the latter requires LoopAnalysisManager
+        //     Nvm! The loop depth info is somehow contained in the loop object, just need to access it
 
+        // BasicBlock *header = L->getHeader();
+        // BasicBlock *latch = L->getLoopLatch();
+        // BasicBlock *preheader = L->getLoopPreheader();
+
+        // //std::unique_ptr<LoopNest>tempNest = &L->getLoopNest();
+        // errs() << "Loop nest object: " << *L << "\n";
+        // errs() << "Loop nest header: " << *header << "\n";
+        
+        // for (Loop* loop_obj : *L){
+        //     errs() << "Loop object: " << *loop_obj << "\n";
+        //     errs() << "Loop header: " << *loop_obj->getHeader() << "\n";
+        // }
+        
       // Your pass is modifying the source code. Figure out which analyses are preserved and only return those, not all.
       return PreservedAnalyses::all();
     }
