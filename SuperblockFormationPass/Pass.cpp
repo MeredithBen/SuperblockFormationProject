@@ -60,32 +60,61 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             }
         }
 
-        //sanity check: print out loop depth to check they were ordered correctly. 
+        //sanity check: print out loop depths to check they were ordered correctly. 
         for (Loop* temp_loop : least_to_most_nested){
             errs() << "Loop depth: " << temp_loop->getLoopDepth() << "\n";
         }
 
         // ------------------------------------------ trace formation ---------------------------------------------------------
-
+        std::list<BasicBlock*> visited_blocks;
         //to iterate through the list in most-nested order, access the back element of list and then pop it off.
-            //for each loop, get BFS list of basic blocks in loop
-            while(!least_to_most_nested.empty()){
-                Loop* current_loop = least_to_most_nested.back();
-                least_to_most_nested.pop_back();
-                 
-                std::vector<BasicBlock*>bfs_blocks = current_loop->getBlocksVector(); //this gets the blocks in breadth-first order!
-                errs() << "This is a loop!" << "\n";
-                for (BasicBlock* temp_block : bfs_blocks){
-                    errs() << "Basic Block: " << *temp_block << "\n";
+        //for each loop, get BFS list of basic blocks in loop
+        while(!least_to_most_nested.empty()){
+            Loop* current_loop = least_to_most_nested.back();
+            least_to_most_nested.pop_back();
+                
+            std::vector<BasicBlock*>bfs_blocks = current_loop->getBlocksVector(); //this gets the blocks in breadth-first order!
+            errs() << "This is a loop!" << "\n";
+
+            // //sanity check: print out basic blocks to check they were ordered correctly. 
+            // for (BasicBlock* temp_block : bfs_blocks){
+            //     errs() << "Basic Block: " << *temp_block << "\n";
+            // }
+
+            //start of grow_trace algo code
+            for(BasicBlock* current_block : bfs_blocks){
+                visited_blocks.push_back(current_block);
+                //check if current block contains a subroutine return or indirect jump
+                std::string opcodeName;
+                for(Instruction &I : *current_block){
+                    opcodeName = I.getOpcodeName();
+                    if(opcodeName == "ret"){
+                        errs() << "Found a subroutine return!" << "\n";
+                        break; // stop growing the trace
+                    }
+                    if(opcodeName == "br"){
+                        //auto br_I = dyn_cast<BranchInst>(I);
+                        errs() << "The branch instruction is: " << I << "\n";
+                        if(I.getNumOperands()==1){ //if the branch is unconditional then it is a jump
+                            errs() << "This instruction has one operand. " << "\n";
+                            llvm::Value* op_value = I.getOperand(0); //this is returning the address of the basic block
+                            //TO DO: check that op_value is a BasicBlock. If it isn't, then this is an indirect branch. 
+                            errs() << "The operand is: " << op_value->getName() << "\n";
+                        }
+                        //Use* op_list = I.getOperandList();
+                        //break; // stop growing the trace
+                    }
                 }
 
-                //iterate thru list of basic blocks, inserting them into new list of visited blocks
-                // add current block to visited, then check if it has an indirect jump or a subroutine return. Stop trace if so. 
-                // if not, get the successor block of the current block. If more than one, use heuristics to choose.
-                // once you have the likely block, check if it is in visited. Stop trace if so.
-                // if likely block dominates current block, stop growing trace. 
-                // If made it this far, add the likely block to the trace and set the likely block to be new current block!
             }
+
+            //iterate thru list of basic blocks, inserting them into new list of visited blocks
+            // add current block to visited, then check if it has an indirect jump or a subroutine return. Stop trace if so. 
+            // if not, get the successor block of the current block. If more than one, use heuristics to choose.
+            // once you have the likely block, check if it is in visited. Stop trace if so.
+            // if likely block dominates current block, stop growing trace. 
+            // If made it this far, add the likely block to the trace and set the likely block to be new current block!
+        }
 
 
 
