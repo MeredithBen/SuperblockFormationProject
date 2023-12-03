@@ -21,6 +21,7 @@
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/Trace.h"
+#include "llvm/IR/Dominators.h"
 
 #include <iostream>
 
@@ -42,7 +43,7 @@ BasicBlock* getLikelyBlock(BasicBlock* block){
 // --------------------------------------- the growTrace function -------------------------------------------------------
 std::list<BasicBlock*> visited;
 
-Trace growTrace(BasicBlock* current_block){
+Trace growTrace(BasicBlock* current_block, DominatorTree& dom_tree){
     //initialize trace with current_block
     std::vector<BasicBlock*> trace_blocks;
     trace_blocks.push_back(current_block);
@@ -77,6 +78,14 @@ Trace growTrace(BasicBlock* current_block){
         //check if likely_block has been visited, and if not, add it to the trace
         if (std::find(visited.begin(), visited.end(), likely_block) == visited.end()){
             // the likely_block has not been visited
+            if(dom_tree.dominates(likely_block, current_block)){
+                errs() << "The likely block dominates the current block! Stop! \n";
+                Trace temp_trace = Trace(trace_blocks);
+                return temp_trace;
+            }
+            
+            //then likely does not dominate current
+            errs() << "The likely block does not dominate the current block.\n";
             trace_blocks.push_back(likely_block);
             current_block = likely_block;
         }else{
@@ -93,6 +102,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         // llvm::BlockFrequencyAnalysis::Result &bfi = FAM.getResult<BlockFrequencyAnalysis>(F);
         // llvm::BranchProbabilityAnalysis::Result &bpi = FAM.getResult<BranchProbabilityAnalysis>(F);
         llvm::LoopAnalysis::Result &li = FAM.getResult<LoopAnalysis>(F);
+        DominatorTree dt = DominatorTree(F);
 
      
         
@@ -137,7 +147,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             std::vector<BasicBlock*>bfs_blocks = current_loop->getBlocksVector(); //this gets the blocks in breadth-first order!
             errs() << "This is a loop!" << "\n";
             
-            //sanity check: print out basic blocks to check they were ordered correctly. 
+            // //sanity check: print out basic blocks to check they were ordered correctly. 
             // for (BasicBlock* temp_block : bfs_blocks){
             //     errs() << "Basic Block: " << *temp_block << "\n";
             // }
@@ -146,7 +156,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             for(BasicBlock* current_block : bfs_blocks){
                 if (std::find(visited.begin(), visited.end(), current_block) == visited.end()){
                     // the current_block has not been visited
-                    Trace my_trace = growTrace(current_block);
+                    Trace my_trace = growTrace(current_block, dt);
                     errs() << "New trace --------------------------------------------- \n";
                     for(BasicBlock* bb : my_trace){
                         errs() << "Trace bb: " << *bb << "\n";
