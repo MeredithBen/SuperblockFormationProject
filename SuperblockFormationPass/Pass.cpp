@@ -28,45 +28,73 @@ using namespace llvm;
 
 namespace {
 
+// ------------------------------------ top level heuristics function ---------------------------------------------------
+BasicBlock* getLikelyBlock(BasicBlock* block){
+    //implement function to return the most likely successor of a basic block
+        // for now, returns just the first successor
+    BasicBlock* temp;
+    for(BasicBlock* bb : successors(block)){
+        temp = bb;
+    }
+    return temp;
+}
+
+// --------------------------------------- the growTrace function -------------------------------------------------------
+std::list<BasicBlock*> visited;
+
+Trace growTrace(BasicBlock* current_block){
+    //initialize trace with current_block
+    std::vector<BasicBlock*> trace_blocks;
+    trace_blocks.push_back(current_block);
+
+    //trace out the optimal path through loop according to hazard-avoidance and heuristics
+    while(1){
+        visited.push_back(current_block);
+        //check if current block contains a subroutine return or indirect jump
+        std::string opcodeName;
+        for(Instruction &I : *current_block){
+            opcodeName = I.getOpcodeName();
+            if(opcodeName == "ret"){
+                errs() << "Found a subroutine return!" << "\n";
+                Trace temp_trace = Trace(trace_blocks);
+                return temp_trace; // stop growing the trace
+            }
+            if(opcodeName == "indirectbr"){
+                errs() << "Found an indirect jump!" << "\n";
+                Trace temp_trace = Trace(trace_blocks);
+                return temp_trace; //stop growing trace
+            }
+        }
+        //get the likely block
+        BasicBlock* likely_block;
+        if(current_block->getSingleSuccessor()){
+            //then add the successor to the trace and make succ the new current block
+            likely_block = current_block->getSingleSuccessor();
+        }else{
+            //then call the heuristics function and pass the current block to it, receive the optimal successor in return
+            likely_block = getLikelyBlock(current_block);
+        }
+        //check if likely_block has been visited, and if not, add it to the trace
+        if (std::find(visited.begin(), visited.end(), likely_block) == visited.end()){
+            // the likely_block has not been visited
+            trace_blocks.push_back(likely_block);
+            current_block = likely_block;
+        }else{
+            Trace temp_trace = Trace(trace_blocks);
+            return temp_trace;
+        }
+    }
+}
+        
+
 struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
 
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM) {
         // llvm::BlockFrequencyAnalysis::Result &bfi = FAM.getResult<BlockFrequencyAnalysis>(F);
         // llvm::BranchProbabilityAnalysis::Result &bpi = FAM.getResult<BranchProbabilityAnalysis>(F);
         llvm::LoopAnalysis::Result &li = FAM.getResult<LoopAnalysis>(F);
-        
-        // --------------------------------------- the growTrace function -------------------------------------------------------
-        std::list<BasicBlock*> visited_blocks;
-        Trace growTrace(BasicBlock* current_block){
 
-            //initialize trace with current_block
-            std::vector<BasicBlock*> trace_blocks;
-            trace_blocks.push_back(current_block);
-
-            //trace out the optimal path through loop according to hazard-avoidance and heuristics
-            while(1){
-                visited_blocks.push_back(current_block);
-                //check if current block contains a subroutine return or indirect jump
-                std::string opcodeName;
-                for(Instruction &I : *current_block){
-                    opcodeName = I.getOpcodeName();
-                    if(opcodeName == "ret"){
-                        errs() << "Found a subroutine return!" << "\n";
-                        return temp_trace; // stop growing the trace
-                    }
-                    if(opcodeName == "indirectbr"){
-                        errs() << "Found an indirect jump!" << "\n";
-                        return temp_trace; //stop growing trace
-                    }
-                }
-                if(successors(current_block).size() == 1){
-                    //then add the successor to the trace and make succ the new current block
-                }else{
-                    //then call the heuristics function and pass the current block to it, receive the optimal successor in return
-                }
-            }
-            return temp_trace;
-        }
+     
         
         // ------------------------------------------ identifying loops ---------------------------------------------------------
         // set up the lists and initialize them with top level loops in program
@@ -114,13 +142,18 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             //     errs() << "Basic Block: " << *temp_block << "\n";
             // }
 
-            //start of grow_trace algo code
+            // iterate through blocks in loop
             for(BasicBlock* current_block : bfs_blocks){
                 if (std::find(visited.begin(), visited.end(), current_block) == visited.end()){
-                      // the current_block has not been visited
-                      growTrace(current_block);
+                    // the current_block has not been visited
+                    Trace my_trace = growTrace(current_block);
+                    errs() << "New trace --------------------------------------------- \n";
+                    for(BasicBlock* bb : my_trace){
+                        errs() << "Trace bb: " << *bb << "\n";
                     }
+                }
             }
+            
             //iterate thru list of basic blocks, inserting them into new list of visited blocks
             // add current block to visited, then check if it has an indirect jump or a subroutine return. Stop trace if so. 
             // if not, get the successor block of the current block. If more than one, use heuristics to choose.
