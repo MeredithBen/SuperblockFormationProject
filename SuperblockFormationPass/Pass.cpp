@@ -73,7 +73,7 @@ Trace growTrace(BasicBlock* current_block, DominatorTree& dom_tree){
             likely_block = current_block->getSingleSuccessor();
         }else{
             //then call the heuristics function and pass the current block to it, receive the optimal successor in return
-            likely_block = getLikelyBlock(current_block);
+            likely_block = getLikelyBlock(current_block); //needs to account for coming out of the loop -- loop heuristic should do that.
         }
         //check if likely_block has been visited, and if not, add it to the trace
         if (std::find(visited.begin(), visited.end(), likely_block) == visited.end()){
@@ -136,7 +136,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             errs() << "Loop depth: " << temp_loop->getLoopDepth() << "\n";
         }
 
-        // ------------------------------------------ trace formation ---------------------------------------------------------
+        // -------------------------------------- trace formation: loop bodies --------------------------------------------------
         
         //form traces with the loop bodies first
         while(!least_to_most_nested.empty()){
@@ -186,14 +186,52 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                 if (std::find(visited.begin(), visited.end(), current_block) == visited.end()){
                     // the current_block has not been visited
                     Trace my_trace = growTrace(current_block, dt);
-                    // errs() << "New trace --------------------------------------------- \n";
-                    // for(BasicBlock* bb : my_trace){
-                    //     errs() << "Trace bb: " << *bb << "\n";
-                    // }
+                    errs() << "New trace --------------------------------------------- \n";
+                    for(BasicBlock* bb : my_trace){
+                        errs() << "Trace bb: " << *bb << "\n";
+                    }
                 }
             }
         }
-        //then we need to iterate through remaining unvisited blocks in program and grow traces!
+        // ---------------------------------------- trace formation: function blocks --------------------------------------------
+        BasicBlock& entry_block_addr = F.getEntryBlock();
+        BasicBlock* entry_block = &entry_block_addr;
+        std::list<BasicBlock*> function_blocks;
+        std::list<BasicBlock*> bfs_function_blocks;
+        function_blocks.push_back(entry_block);
+
+        while(!function_blocks.empty()){
+            BasicBlock* current_function_block = function_blocks.front();
+            function_blocks.pop_front();
+
+            for(BasicBlock* succ : successors(current_function_block)){
+                //if the successor has already been added to bfs_blocks, don't add it again (happens when taking backedges that aren't from latch of current loop)
+                if(std::find(bfs_function_blocks.begin(), bfs_function_blocks.end(), succ) != bfs_function_blocks.end()){
+                    continue;
+                }else{
+                    function_blocks.push_back(succ);
+                    bfs_function_blocks.push_back(succ);
+                }
+            }
+        }
+        // //sanity check: print out basic blocks to check they were ordered correctly. 
+        // for (BasicBlock* temp_block : bfs_function_blocks){
+        //     errs() << "Basic Block: " << *temp_block << "\n";
+        // }
+
+        //now do trace formation for remaining function blocks
+        for(BasicBlock* current_block : bfs_function_blocks){
+            if (std::find(visited.begin(), visited.end(), current_block) == visited.end()){
+                // the current_block has not been visited
+                Trace my_trace = growTrace(current_block, dt);
+                errs() << "New trace --------------------------------------------- \n";
+                for(BasicBlock* bb : my_trace){
+                    errs() << "Trace bb: " << *bb << "\n";
+                }
+            }
+        }
+
+
 
         
       // Your pass is modifying the source code. Figure out which analyses are preserved and only return those, not all.
