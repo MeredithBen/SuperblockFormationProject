@@ -123,7 +123,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             current_loop = bfs_loops.front();
             bfs_loops.pop_front();
             // for each top level loop in the loop you are currently visiting, add the loop object to a stack.
-                // also add the loop along with the depth to a list to be used later
+                // also add the loop to a list to be used later
             for (Loop *SL : current_loop->getSubLoops()) {
                 errs() << "subloop: " << *SL << "\n";
                 bfs_loops.push_back(SL);
@@ -140,27 +140,62 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         
         //to iterate through the list in most-nested order, access the back element of list and then pop it off.
         //for each loop, get BFS list of basic blocks in loop
+        
         while(!least_to_most_nested.empty()){
             Loop* current_loop = least_to_most_nested.back();
             least_to_most_nested.pop_back();
-                
-            std::vector<BasicBlock*>bfs_blocks = current_loop->getBlocksVector(); //this gets the blocks in breadth-first order!
-            errs() << "This is a loop!" << "\n";
-            
-            // //sanity check: print out basic blocks to check they were ordered correctly. 
-            // for (BasicBlock* temp_block : bfs_blocks){
-            //     errs() << "Basic Block: " << *temp_block << "\n";
+
+            //same exact logic as used above to create bfs list of loops   
+            std::list<BasicBlock*> bfs_blocks;  
+            std::list<BasicBlock*> loop_blocks;  
+            std::vector<BasicBlock*> blocks_vector = current_loop->getBlocksVector();
+            BasicBlock* header = current_loop->getHeader();
+            loop_blocks.push_back(header);
+            bfs_blocks.push_back(header);
+
+            errs() << "Starting new list of loop blocks! -------------- \n";
+        
+            // for(BasicBlock* bb : loop_blocks){
+            //     for(BasicBlock* succ : successors(bb)){
+            //         //if the successor is in the loop, add it to the bfs_loops list
+            //         if(std::find(blocks_vector.begin(), blocks_vector.end(), succ) != blocks_vector.end()){
+
+            //         }
+            //     }
             // }
+            BasicBlock* current_loop_block;
+            while(!loop_blocks.empty()){
+                current_loop_block = loop_blocks.front();
+                loop_blocks.pop_front();
+                errs() << "Current loop block: " << *current_loop_block << "\n";
+
+                for(BasicBlock* succ : successors(current_loop_block)){
+                    //if the successor is in the loop, add it to the bfs_loops list
+                    if(succ == header){ //need to somehow track visited -- backedges that aren't the latch to current loop are making this run forever
+                        break;
+                    }
+                    if(std::find(blocks_vector.begin(), blocks_vector.end(), succ) != blocks_vector.end()){
+                        loop_blocks.push_back(succ);
+                        bfs_blocks.push_back(succ);
+                    }
+                }
+            }
+            
+
+            //sanity check: print out basic blocks to check they were ordered correctly. 
+            for (BasicBlock* temp_block : bfs_blocks){
+                errs() << "Basic Block: " << *temp_block << "\n";
+            }
 
             // iterate through blocks in loop
             for(BasicBlock* current_block : bfs_blocks){
                 if (std::find(visited.begin(), visited.end(), current_block) == visited.end()){
                     // the current_block has not been visited
                     Trace my_trace = growTrace(current_block, dt);
-                    errs() << "New trace --------------------------------------------- \n";
-                    for(BasicBlock* bb : my_trace){
-                        errs() << "Trace bb: " << *bb << "\n";
-                    }
+                    // errs() << "New trace --------------------------------------------- \n";
+                    // for(BasicBlock* bb : my_trace){
+                    //     errs() << "Trace bb: " << *bb << "\n";
+                    // }
                 }
             }
             
