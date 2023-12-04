@@ -138,14 +138,13 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
 
         // ------------------------------------------ trace formation ---------------------------------------------------------
         
-        //to iterate through the list in most-nested order, access the back element of list and then pop it off.
-        //for each loop, get BFS list of basic blocks in loop
-        
+        //form traces with the loop bodies first
         while(!least_to_most_nested.empty()){
+            //to iterate through the loops in most-nested order, access the back element of list and then pop it off.
             Loop* current_loop = least_to_most_nested.back();
             least_to_most_nested.pop_back();
 
-            //same exact logic as used above to create bfs list of loops   
+            //create bfs list of loop blocks, following same concept as above for bfs loops
             std::list<BasicBlock*> bfs_blocks;  
             std::list<BasicBlock*> loop_blocks;  
             std::vector<BasicBlock*> blocks_vector = current_loop->getBlocksVector();
@@ -155,25 +154,21 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
 
             errs() << "Starting new list of loop blocks! -------------- \n";
         
-            // for(BasicBlock* bb : loop_blocks){
-            //     for(BasicBlock* succ : successors(bb)){
-            //         //if the successor is in the loop, add it to the bfs_loops list
-            //         if(std::find(blocks_vector.begin(), blocks_vector.end(), succ) != blocks_vector.end()){
-
-            //         }
-            //     }
-            // }
             BasicBlock* current_loop_block;
             while(!loop_blocks.empty()){
                 current_loop_block = loop_blocks.front();
                 loop_blocks.pop_front();
-                errs() << "Current loop block: " << *current_loop_block << "\n";
 
                 for(BasicBlock* succ : successors(current_loop_block)){
-                    //if the successor is in the loop, add it to the bfs_loops list
-                    if(succ == header){ //need to somehow track visited -- backedges that aren't the latch to current loop are making this run forever
+                    //if the successor is the header of the loop, we have taken backedge and need to stop
+                    if(succ == header){
                         break;
                     }
+                    //if the successor has already been added to bfs_blocks, don't add it again (happens when taking backedges that aren't from latch of current loop)
+                    if(std::find(bfs_blocks.begin(), bfs_blocks.end(), succ) != bfs_blocks.end()){
+                        break;
+                    }
+                    //if the successor is in the loop, add it to the bfs_loops list
                     if(std::find(blocks_vector.begin(), blocks_vector.end(), succ) != blocks_vector.end()){
                         loop_blocks.push_back(succ);
                         bfs_blocks.push_back(succ);
@@ -181,11 +176,10 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                 }
             }
             
-
-            //sanity check: print out basic blocks to check they were ordered correctly. 
-            for (BasicBlock* temp_block : bfs_blocks){
-                errs() << "Basic Block: " << *temp_block << "\n";
-            }
+            // //sanity check: print out basic blocks to check they were ordered correctly. 
+            // for (BasicBlock* temp_block : bfs_blocks){
+            //     errs() << "Basic Block: " << *temp_block << "\n";
+            // }
 
             // iterate through blocks in loop
             for(BasicBlock* current_block : bfs_blocks){
@@ -198,13 +192,6 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                     // }
                 }
             }
-            
-            //iterate thru list of basic blocks, inserting them into new list of visited blocks
-            // add current block to visited, then check if it has an indirect jump or a subroutine return. Stop trace if so. 
-            // if not, get the successor block of the current block. If more than one, use heuristics to choose.
-            // once you have the likely block, check if it is in visited. Stop trace if so.
-            // if likely block dominates current block, stop growing trace. 
-            // If made it this far, add the likely block to the trace and set the likely block to be new current block!
         }
         //then we need to iterate through remaining unvisited blocks in program and grow traces!
 
