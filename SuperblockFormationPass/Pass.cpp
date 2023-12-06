@@ -61,26 +61,34 @@ bool isUsedByBranch(Instruction &I) {
 
 //Returns true if the constant variable for comparison is 0
 bool isZero(Instruction &I, Value &v) {
-        auto output = dyn_cast<Instruction>(&v);
-        if (auto test = dyn_cast<ConstantInt>(&v)) {
-            if (test->isZero()) {
+        if (auto constInt = dyn_cast<ConstantInt>(&v)) {
+            if (constInt->isZero()) {
                 return true;
             }
         }
-        //if (isa<constantFp>(&v)) {
-        //llvmconstant data
-        //}
-        //v --> dyncast to const int --> means it's a const int
-        //int i = 0; --> getvalue to make it
-        //const int --> getvalue
-        //const fp class --> const floating point --> get value
+    return false;
+}
+bool isFloatingPt(Instruction &I) {
+    if (FCmpInst *FCC = dyn_cast<FCmpInst>(&I)) {
+        if (FCC->getPredicate() == CmpInst::FCMP_OEQ) {
+            Value &op0 = *I.getOperand(0);
+            Value &op1 = *I.getOperand(1);
+            if (isa<ConstantFP>(&op0) && !(isa<ConstantFP>(&op1))) {
+                //errs() << "*I.getOperand(0)" << *I.getOperand(0) << "\n";
+                return true;
+            }
+            else if (!(isa<ConstantFP>(&op0)) && isa<ConstantFP>(&op1)){
+                //errs() << "*I.getOperand(1); " << *I.getOperand(1) << "\n";
+                return true;
+            }
+        } 
+    }
     return false;
 }
 //Returns true if you want to take that branch (not neg comp)
 //Returns false if you don't want to take that branch (neg comp)
 bool isNegativeComparison (Instruction &I) {
     if (isUsedByBranch(I) && isa<ICmpInst>(&I)) {
-        //errs() << "I" << I << "\n";
         ICmpInst *ICC = dyn_cast<ICmpInst>(&I);
         llvm::CmpInst::Predicate pr=ICC->getSignedPredicate();
         Value &SLT = *I.getOperand(1);
@@ -88,15 +96,20 @@ bool isNegativeComparison (Instruction &I) {
         switch(pr){
             case CmpInst::ICMP_SGT: return isZero(I, SGT);
             case CmpInst::ICMP_SLT: return isZero(I, SLT);
+            //case CmpInst::ICMP_EQ: return isFloatingPt(I, )
         }
     }
     return false;
 }
 
+
 void opcodeHeuristic(BasicBlock &BB) {
     for (Instruction &I : BB) {
         if (isNegativeComparison(I)) {
-            errs() << "I" << I << "\n";
+            errs() << "I Not taken" << I << "\n";
+        }
+        else if (isFloatingPt(I)) {
+            errs() << "I Not taken" << I << "\n";
         }
         
     }

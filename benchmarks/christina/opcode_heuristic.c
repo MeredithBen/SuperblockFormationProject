@@ -13,6 +13,9 @@ int main(){
             j--;
             printf("Goodbye World!");
         }
+        else if (j == 3.1456) {
+            printf("stuff");
+        }
 	}
 	return 0;
 }

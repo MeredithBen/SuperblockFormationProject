@@ -1,2 +1,3 @@
-I  %9 = icmp slt i32 %8, 0
-I  %16 = icmp sgt i32 0, %15
+I Not taken  %9 = icmp slt i32 %8, 0
+I Not taken  %16 = icmp sgt i32 0, %15
+I Not taken  %24 = fcmp oeq double %23, 3.145600e+00
