@@ -45,6 +45,7 @@ bool isSLT(CmpInst *cmpInst) {
     return false;
 }
 
+//Returns true if the icmp instruction is used by a branch instruction
 bool isUsedByBranch(Instruction &I) {
     for (User *U : I.users()) {
         errs() << "User *U: " << *U << "\n";
@@ -57,28 +58,41 @@ bool isUsedByBranch(Instruction &I) {
     return false;
 }
 
+//Returns true if the constant variable for comparison is 0
 bool isZero(Instruction &I) {
     if (I.getNumOperands() > 0) {
         Value &v = *I.getOperand(1);
-        errs() << "v:" << 1 << " " << v << "\n";
-        //errs() << *v.getType();
-
+        errs() << "v: " << 1 << " " << v << "\n";
         auto output = dyn_cast<Instruction>(&v);
-
-
+        errs() << "v.getName()" << v.getName() << "\n";
+        if (auto test = dyn_cast<ConstantInt>(&v)) {
+            if (test->isZero()) {
+                errs() << "is zero \n";
+                return true;
+            }
+        }
+        //if (isa<constantFp>(&v)) {
+        //llvmconstant data
+        //}
+        //v --> dyncast to const int --> means it's a const int
+        //int i = 0; --> getvalue to make it
+        //const int --> getvalue
+        //const fp class --> const floating point --> get value
+    }
+    return false;
+}
+// Returns true if there is an i < 0 comparison
+bool negativeComparison(Instruction &I, CmpInst *cmpInst) {
+    if (isZero(I) && isUsedByBranch(I) && isSLT(cmpInst)) {
         return true;
     }
     return false;
 }
-
-void opcode_heuristic(BasicBlock &BB) {
+void opcodeHeuristic(BasicBlock &BB) {
     for (Instruction &I : BB) {
         if (CmpInst *cmpInst = dyn_cast<CmpInst>(&I)) {
             errs() << "I" << I << "\n";
-            isZero(I);
-            isUsedByBranch(I);
-            isSLT(cmpInst);
-            
+            negativeComparison(I, cmpInst);
         }
     }
 }
@@ -100,7 +114,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
 
         }
         for (BasicBlock &BB : F) {
-            opcode_heuristic(BB);
+            opcodeHeuristic(BB);
         }
         
         
