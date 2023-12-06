@@ -9,7 +9,7 @@ int main(){
             j++;
             printf("Hello World!");
         }
-        else {
+        else if (0 > j){
             j--;
             printf("Goodbye World!");
         }

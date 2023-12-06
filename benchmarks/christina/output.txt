@@ -1,9 +1,2 @@
-header of loop: 0x55b697f70690
-I  %6 = icmp slt i32 %5, 10
-v: 1 i32 10
-v.getName()
 I  %9 = icmp slt i32 %8, 0
-v: 1 i32 0
-v.getName()
-is zero 
-User *U:   br i1 %9, label %10, label %14, !prof !37
+I  %16 = icmp sgt i32 0, %15

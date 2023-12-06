@@ -45,10 +45,11 @@ bool isSLT(CmpInst *cmpInst) {
     return false;
 }
 
+
 //Returns true if the icmp instruction is used by a branch instruction
 bool isUsedByBranch(Instruction &I) {
     for (User *U : I.users()) {
-        errs() << "User *U: " << *U << "\n";
+        //errs() << "User *U: " << *U << "\n";
         auto userInstr = dyn_cast<Instruction>(U);
         string userOpcode = userInstr -> getOpcodeName();
         if (userOpcode == "br") {
@@ -59,15 +60,10 @@ bool isUsedByBranch(Instruction &I) {
 }
 
 //Returns true if the constant variable for comparison is 0
-bool isZero(Instruction &I) {
-    if (I.getNumOperands() > 0) {
-        Value &v = *I.getOperand(1);
-        errs() << "v: " << 1 << " " << v << "\n";
+bool isZero(Instruction &I, Value &v) {
         auto output = dyn_cast<Instruction>(&v);
-        errs() << "v.getName()" << v.getName() << "\n";
         if (auto test = dyn_cast<ConstantInt>(&v)) {
             if (test->isZero()) {
-                errs() << "is zero \n";
                 return true;
             }
         }
@@ -78,22 +74,31 @@ bool isZero(Instruction &I) {
         //int i = 0; --> getvalue to make it
         //const int --> getvalue
         //const fp class --> const floating point --> get value
+    return false;
+}
+//Returns true if you want to take that branch (not neg comp)
+//Returns false if you don't want to take that branch (neg comp)
+bool isNegativeComparison (Instruction &I) {
+    if (isUsedByBranch(I) && isa<ICmpInst>(&I)) {
+        //errs() << "I" << I << "\n";
+        ICmpInst *ICC = dyn_cast<ICmpInst>(&I);
+        llvm::CmpInst::Predicate pr=ICC->getSignedPredicate();
+        Value &SLT = *I.getOperand(1);
+        Value &SGT = *I.getOperand(0);
+        switch(pr){
+            case CmpInst::ICMP_SGT: return isZero(I, SGT);
+            case CmpInst::ICMP_SLT: return isZero(I, SLT);
+        }
     }
     return false;
 }
-// Returns true if there is an i < 0 comparison
-bool negativeComparison(Instruction &I, CmpInst *cmpInst) {
-    if (isZero(I) && isUsedByBranch(I) && isSLT(cmpInst)) {
-        return true;
-    }
-    return false;
-}
+
 void opcodeHeuristic(BasicBlock &BB) {
     for (Instruction &I : BB) {
-        if (CmpInst *cmpInst = dyn_cast<CmpInst>(&I)) {
+        if (isNegativeComparison(I)) {
             errs() << "I" << I << "\n";
-            negativeComparison(I, cmpInst);
         }
+        
     }
 }
 
@@ -110,7 +115,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             BasicBlock *latch = L->getLoopLatch();
             BasicBlock *preheader = L->getLoopPreheader();
 
-            errs() << "header of loop: " << header << "\n";
+            //errs() << "header of loop: " << header << "\n";
 
         }
         for (BasicBlock &BB : F) {
