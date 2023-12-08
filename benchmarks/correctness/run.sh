@@ -49,7 +49,21 @@ opt -passes="pgo-instr-use" -o ${1}.profdata.bc -pgo-test-profile-file=${1}.prof
 # llvm-dis ${1}.profdata.bc -o ${1}.prof.ll
 
 # Runs your pass on the instrumented code.
-opt --disable-output -load-pass-plugin="${PATH2LIB}" -passes="${PASS}" ${1}.profdata.bc
+#opt --disable-output -load-pass-plugin="${PATH2LIB}" -passes="${PASS}" ${1}.profdata.bc
+
+
+# We now use the profile augmented bc file as input to your pass.
+opt -load-pass-plugin="${PATH2LIB}" -passes="${PASS}" ${1}.profdata.bc -o ${1}.fplicm.bc > /dev/null
+
+# Generate binary excutable before FPLICM: Unoptimzed code
+clang ${1}.ls.bc -o ${1}_no_fplicm 
+# Generate binary executable after FPLICM: Optimized code
+clang ${1}.fplicm.bc -o ${1}_fplicm
+
+# Produce output from binary to check correctness
+./${1}_fplicm > fplicm_output
+
+
 
 # Cleanup: Remove this if you want to retain the created files.
 rm -f *.in *.in.Z default.profraw *_prof *_fplicm *.bc *.profdata *_output *.ll words

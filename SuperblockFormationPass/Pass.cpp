@@ -275,11 +275,42 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                                 //errs() << "The cloned bb is now: " << *cloned_bb << "\n";
                             }
                         }
+                        //after cloning a basic block, need to fix up by adding phi nodes to the join point
+                        //for every variable that is assigned in the bb_to_clone, need to add a phi in join point with vals from bb_to_clone and cloned_bb
+                        
+                        //the join point will be all of the the immediate successors of the last block that was pushed back into cloned_blocks
+                        BasicBlock* last_cloned = cloned_blocks.back();
+                        for(BasicBlock* join_point : successors(last_cloned)){
+                            for(Instruction& bb_inst : *bb_to_clone){
+                                if(!bb_inst.getType()->isVoidTy()){
+                                    //if the instruction returns something, then it must added to a phi_node at join point
+                                    //then get the matching instruction from the cloned block
+                                    for(Instruction& clone_inst : *cloned_bb){
+                                        if(clone_inst.isIdenticalTo(&bb_inst)){ //then we have our two instructions to use in phi node!
+                                            //cast instructions to values
+                                            llvm::Value* bb_inst_val = dyn_cast<Value>(&bb_inst);
+                                            llvm::Value* clone_inst_val = dyn_cast<Value>(&clone_inst);
+
+                                            //create phi node and insert it at join point
+                                            PHINode *phi = PHINode::Create(bb_inst_val->getType(), 0, Twine("phiNode"));
+                                            phi->insertBefore(join_point->getFirstNonPHI()); 
+
+                                            //finally, add the two values along with their BBs to the phi node
+                                            phi->addIncoming(bb_inst_val, bb_to_clone);
+                                            phi->addIncoming(clone_inst_val, cloned_bb);
+                                        }
+                                    }
+                                }
+                            }
+
+                        }
                     }
                 }
             }
         }
-        entry_block->getParent()->viewCFG();
+        for (BasicBlock &BB : F){
+          errs() << "Basic Block: " << BB << "\n";
+        }
 
 
 
