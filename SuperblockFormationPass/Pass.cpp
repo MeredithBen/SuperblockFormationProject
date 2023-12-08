@@ -156,6 +156,13 @@ bool branchDirectionHeuristic(BasicBlock &BB, llvm::LoopAnalysis::Result &li) {
     return false;
 }
 
+// Finds store instruction
+// Gets the predecessor of that instruction
+// Gets the ICMP related to that predecessor's branch instruction
+// Gets the registers used in the ICMP
+// Checks if the registers were loaded with the same value as the store instruction
+// returns false if the same value was stored and loaded (The value was overwritten inside of the branch)
+// returns true if not.
 bool guardHeuristic(BasicBlock &BB) {
     for (Instruction &Istore : BB) {
         string opcode1 = Istore.getOpcodeName();
@@ -176,17 +183,16 @@ bool guardHeuristic(BasicBlock &BB) {
                                     errs() << "loadVal: " << loadVal << "\n";
                                     errs() << "Icmp: " << Icmp << "\n";
                                     errs() << "Pred: " << *Pred << "\n";
-                                    return true;
+                                    return false;
                                 }
                             }
-                            
                         }
                     }
                 }
             }
         }
     }
-    return false;
+    return true;
 }
 
 struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
