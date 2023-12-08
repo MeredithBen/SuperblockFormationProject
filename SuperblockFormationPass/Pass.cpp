@@ -23,6 +23,7 @@
 #include "llvm/Analysis/Trace.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/Transforms/Utils/Cloning.h"
+#include "llvm/Transforms/Utils/ValueMapper.h"
 
 #include <iostream>
 
@@ -237,6 +238,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         }
         // ----------------------------------------------- tail duplication -----------------------------------------------------
         //if there is a block in the trace other than the header that has multiple predecessors, we need to tail duplicate that block and all remaining blocks in trace below it
+        ValueToValueMapTy VMap;
         for(Trace curr_trace : traces){
             BasicBlock* first_in_trace = curr_trace.getEntryBasicBlock();
             for(BasicBlock* curr_bb : curr_trace){
@@ -246,10 +248,20 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                     auto curr_index = curr_trace.getBlockIndex(curr_bb);
                     errs() << "The length of the trace is: " << trace_size << " and the index is "<< curr_index <<"\n";
                     for(int i=curr_index; i<trace_size; i++){ //for all of the blocks in the trace after the side entrance
-                        BasicBlock* bb_to_clone = curr_trace.getBlock(i);
-                        BasicBlock* cloned_bb = CloneBasicBlock(bb_to_clone);
+                        BasicBlock* bb_to_clone = curr_trace.getBlock(i); 
+                        BasicBlock* cloned_bb = CloneBasicBlock(bb_to_clone, VMap);
+                        cloned_bb->insertInto(&F); //insert the cloned_bb into the function
                         errs() << "The cloned bb is: " << *cloned_bb <<"\n";
-                        //need to figure out VMap stuff
+                        //need to change the predecessors of the bb_to_clone and the cloned_bb
+                        for(BasicBlock* pred : predecessors(curr_bb)){
+                            //one pred is in trace, should stay connected to bb_to_clone
+                                //other pred not in trace, should renove connection to curr_bb and instead connect to cloned_bb
+                            if(std::find(curr_trace.begin(), curr_trace.end(), pred) == curr_trace.end()){
+                                Instruction* terminator = pred->getTerminator();
+                                terminator->replaceSuccessorWith(bb_to_clone, cloned_bb);
+                                errs() << "The cloned bb is now: " << *cloned_bb << "\n";
+                            }
+                        }
                     }
                 }
             }
