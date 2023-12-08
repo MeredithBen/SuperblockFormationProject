@@ -22,6 +22,7 @@
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/Trace.h"
 #include "llvm/IR/Dominators.h"
+#include "llvm/Transforms/Utils/Cloning.h"
 
 #include <iostream>
 
@@ -105,7 +106,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         DominatorTree dt = DominatorTree(F);
 
      
-        
+        std::list<Trace> traces;
         // ------------------------------------------ identifying loops ---------------------------------------------------------
         // set up the lists and initialize them with top level loops in program
         std::list<Loop*> bfs_loops;
@@ -181,13 +182,14 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             //     errs() << "Basic Block: " << *temp_block << "\n";
             // }
 
-            // iterate through blocks in loop
+            // iterate through blocks in loop and forrm traces
             for(BasicBlock* current_block : bfs_blocks){
                 if (std::find(visited.begin(), visited.end(), current_block) == visited.end()){
                     // the current_block has not been visited
-                    Trace my_trace = growTrace(current_block, dt);
+                    Trace temp_trace = growTrace(current_block, dt);
+                    traces.push_back(temp_trace);
                     errs() << "New trace --------------------------------------------- \n";
-                    for(BasicBlock* bb : my_trace){
+                    for(BasicBlock* bb : temp_trace){
                         errs() << "Trace bb: " << *bb << "\n";
                     }
                 }
@@ -198,7 +200,9 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         BasicBlock* entry_block = &entry_block_addr;
         std::list<BasicBlock*> function_blocks;
         std::list<BasicBlock*> bfs_function_blocks;
+       
         function_blocks.push_back(entry_block);
+        bfs_function_blocks.push_back(entry_block);
 
         while(!function_blocks.empty()){
             BasicBlock* current_function_block = function_blocks.front();
@@ -223,10 +227,30 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         for(BasicBlock* current_block : bfs_function_blocks){
             if (std::find(visited.begin(), visited.end(), current_block) == visited.end()){
                 // the current_block has not been visited
-                Trace my_trace = growTrace(current_block, dt);
+                Trace temp_trace = growTrace(current_block, dt);
+                traces.push_back(temp_trace);
                 errs() << "New trace --------------------------------------------- \n";
-                for(BasicBlock* bb : my_trace){
+                for(BasicBlock* bb : temp_trace){
                     errs() << "Trace bb: " << *bb << "\n";
+                }
+            }
+        }
+        // ----------------------------------------------- tail duplication -----------------------------------------------------
+        //if there is a block in the trace other than the header that has multiple predecessors, we need to tail duplicate that block and all remaining blocks in trace below it
+        for(Trace curr_trace : traces){
+            BasicBlock* first_in_trace = curr_trace.getEntryBasicBlock();
+            for(BasicBlock* curr_bb : curr_trace){
+                if(curr_bb->hasNPredecessorsOrMore(2) && curr_bb != first_in_trace){
+                    //if there is a block in the trace that has 2 or more predecessors, and it isn't the header, need to tail-duplicate
+                    auto trace_size = curr_trace.size();
+                    auto curr_index = curr_trace.getBlockIndex(curr_bb);
+                    errs() << "The length of the trace is: " << trace_size << " and the index is "<< curr_index <<"\n";
+                    for(int i=curr_index; i<trace_size; i++){ //for all of the blocks in the trace after the side entrance
+                        BasicBlock* bb_to_clone = curr_trace.getBlock(i);
+                        BasicBlock* cloned_bb = CloneBasicBlock(bb_to_clone);
+                        errs() << "The cloned bb is: " << *cloned_bb <<"\n";
+                        //need to figure out VMap stuff
+                    }
                 }
             }
         }
