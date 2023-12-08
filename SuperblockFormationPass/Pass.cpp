@@ -247,25 +247,39 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                     auto trace_size = curr_trace.size();
                     auto curr_index = curr_trace.getBlockIndex(curr_bb);
                     errs() << "The length of the trace is: " << trace_size << " and the index is "<< curr_index <<"\n";
+                    
+                    std::list<BasicBlock*> cloned_blocks; //create a stack of cloned blocks in trace, pushing and popping from back
                     for(int i=curr_index; i<trace_size; i++){ //for all of the blocks in the trace after the side entrance
                         BasicBlock* bb_to_clone = curr_trace.getBlock(i); 
                         BasicBlock* cloned_bb = CloneBasicBlock(bb_to_clone, VMap);
                         cloned_bb->insertInto(&F); //insert the cloned_bb into the function
-                        errs() << "The cloned bb is: " << *cloned_bb <<"\n";
+                        //errs() << "The cloned bb is: " << *cloned_bb <<"\n";
+                        
                         //need to change the predecessors of the bb_to_clone and the cloned_bb
-                        for(BasicBlock* pred : predecessors(curr_bb)){
-                            //one pred is in trace, should stay connected to bb_to_clone
-                                //other pred not in trace, should renove connection to curr_bb and instead connect to cloned_bb
-                            if(std::find(curr_trace.begin(), curr_trace.end(), pred) == curr_trace.end()){
+                        for(BasicBlock* pred : predecessors(bb_to_clone)){
+                            //if the basic block only has one predecessor, then it is the second/third/etc in the trace
+                            if(!bb_to_clone->hasNPredecessorsOrMore(2)){ 
+                                //need to connect cloned_bb as a successor of the previously cloned block
+                                BasicBlock* latest_clone = cloned_blocks.back();
+                                cloned_blocks.pop_back();
+                                Instruction* terminator = latest_clone->getTerminator();
+                                terminator->replaceSuccessorWith(bb_to_clone, cloned_bb);
+                                cloned_blocks.push_back(cloned_bb);
+                            }
+                            //if bb has more than one predecssor, one pred is in trace and should stay connected to bb_to_clone
+                                //but other pred not in trace and should renove connection to curr_bb and instead connect to cloned_bb
+                            else if(std::find(curr_trace.begin(), curr_trace.end(), pred) == curr_trace.end()){
                                 Instruction* terminator = pred->getTerminator();
                                 terminator->replaceSuccessorWith(bb_to_clone, cloned_bb);
-                                errs() << "The cloned bb is now: " << *cloned_bb << "\n";
+                                cloned_blocks.push_back(cloned_bb);
+                                //errs() << "The cloned bb is now: " << *cloned_bb << "\n";
                             }
                         }
                     }
                 }
             }
         }
+        entry_block->getParent()->viewCFG();
 
 
 
