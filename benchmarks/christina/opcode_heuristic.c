@@ -14,8 +14,9 @@ int main(){
             printf("Goodbye World!");
         }
         else if (j == 3.1456) {
-            printf("stuff");
+            break;
         }
 	}
+    printf("outside loop now");
 	return 0;
 }

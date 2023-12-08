@@ -18,6 +18,11 @@
 #include "llvm/IR/Use.h"
 #include "llvm/IR/User.h"
 #include "llvm/IR/InstrTypes.h"
+#include <vector>
+#include <unordered_map>
+#include <queue>
+
+
 
 #include <iostream>
 
@@ -96,7 +101,6 @@ bool isNegativeComparison (Instruction &I) {
         switch(pr){
             case CmpInst::ICMP_SGT: return isZero(I, SGT);
             case CmpInst::ICMP_SLT: return isZero(I, SLT);
-            //case CmpInst::ICMP_EQ: return isFloatingPt(I, )
         }
     }
     return false;
@@ -113,6 +117,43 @@ void opcodeHeuristic(BasicBlock &BB) {
         }
         
     }
+}
+
+//Gets all preds based on the current basic block
+unordered_map<BasicBlock *, BasicBlock *> createPredsMap(BasicBlock &BB, llvm::LoopAnalysis::Result &li) {
+    std::unordered_map<BasicBlock *, BasicBlock *> PredsMap;
+    std::queue<BasicBlock *> PredsQueue;
+    for (Loop *L : li) {
+        BasicBlock *currBB = L->getHeader();
+        BasicBlock *latch = L->getLoopLatch();
+        while (currBB != latch) {
+            for (BasicBlock *Pred : predecessors(currBB)) {
+                PredsQueue.push(Pred);
+                PredsMap[Pred] = currBB;
+            }
+            currBB = PredsQueue.front();
+            PredsQueue.pop();
+        }
+    }
+    return PredsMap;
+    
+}
+//Return true if found a backwards branch
+//Return false if only forwards
+bool branchDirectionHeuristic(BasicBlock &BB, llvm::LoopAnalysis::Result &li) {
+    std::unordered_map<BasicBlock *, BasicBlock *> PredsMap = createPredsMap(BB, li);
+    for (Instruction &I : BB) {
+        string opcode = I.getOpcodeName();
+        if (opcode == "br") {
+            for (unsigned i = 0; i < I.getNumOperands(); i++) {
+                BasicBlock *opBB = dyn_cast<BasicBlock>(I.getOperand(i));
+                if (PredsMap.find(opBB) != PredsMap.end()) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }
 
 struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
@@ -132,7 +173,8 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
 
         }
         for (BasicBlock &BB : F) {
-            opcodeHeuristic(BB);
+            
+
         }
         
         
