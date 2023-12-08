@@ -1,1 +1,22 @@
-found smth that is a pred
+loadReg  %3 = alloca i32, align 4
+storeReg  %3 = alloca i32, align 4
+Istore:   store i32 %13, ptr %3, align 4
+loadVal:   %9 = load i32, ptr %3, align 4
+Icmp:   %10 = icmp slt i32 %9, 0
+Pred: 
+8:                                                ; preds = %5
+  %9 = load i32, ptr %3, align 4
+  %10 = icmp slt i32 %9, 0
+  br i1 %10, label %11, label %15, !prof !37
+
+loadReg  %3 = alloca i32, align 4
+storeReg  %3 = alloca i32, align 4
+Istore:   store i32 %25, ptr %3, align 4
+loadVal:   %16 = load i32, ptr %3, align 4
+Icmp:   %17 = icmp sgt i32 %16, 0
+Pred: 
+15:                                               ; preds = %8
+  %16 = load i32, ptr %3, align 4
+  %17 = icmp sgt i32 %16, 0
+  br i1 %17, label %18, label %23, !prof !38
+

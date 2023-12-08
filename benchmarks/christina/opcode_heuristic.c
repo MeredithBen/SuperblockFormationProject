@@ -1,20 +1,21 @@
 #include <stdio.h>
 
 int main(){
-	int i, j;
+	int i, j, k;
 	j = 5;
+    k = 10;
 	for(i = 0; i < 10; i++) {
 		if (j < 0) 
         {
             j++;
             printf("Hello World!");
         }
-        else if (0 > j){
-            j--;
+        else if (j > 0){
+            k=k/j;
             printf("Goodbye World!");
         }
-        else if (j == 3.1456) {
-            break;
+        else {
+            j = j / 2;
         }
 	}
     printf("outside loop now");

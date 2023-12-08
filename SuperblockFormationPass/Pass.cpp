@@ -156,6 +156,39 @@ bool branchDirectionHeuristic(BasicBlock &BB, llvm::LoopAnalysis::Result &li) {
     return false;
 }
 
+bool guardHeuristic(BasicBlock &BB) {
+    for (Instruction &Istore : BB) {
+        string opcode1 = Istore.getOpcodeName();
+        if (opcode1 == "store" && (Istore.getNumOperands() > 1)) {
+            Value &storeReg = *Istore.getOperand(1);
+            for (BasicBlock *Pred : predecessors(&BB)) {
+                for (Instruction &Icmp : *Pred) {
+                    Value &loadVal = *Icmp.getOperand(0);
+                    if (Instruction *loadInstr = dyn_cast<Instruction>(&loadVal)) {
+                        string opcode2 = loadInstr->getOpcodeName();
+                        if (isUsedByBranch(Icmp) && isa<ICmpInst>(&Icmp) && (opcode2 =="load") ) {
+                            for (unsigned i = 0; i < loadInstr->getNumOperands(); i++) {
+                                Value &loadReg = *loadInstr->getOperand(0);
+                                if (&loadReg == &storeReg) {
+                                    errs() << "loadReg" << loadReg << "\n";
+                                    errs() << "storeReg" << storeReg << "\n";
+                                    errs() << "Istore: " << Istore << "\n";
+                                    errs() << "loadVal: " << loadVal << "\n";
+                                    errs() << "Icmp: " << Icmp << "\n";
+                                    errs() << "Pred: " << *Pred << "\n";
+                                    return true;
+                                }
+                            }
+                            
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
 struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
 
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM) {
@@ -168,12 +201,9 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             BasicBlock *header = L->getHeader();
             BasicBlock *latch = L->getLoopLatch();
             BasicBlock *preheader = L->getLoopPreheader();
-
-            //errs() << "header of loop: " << header << "\n";
-
         }
         for (BasicBlock &BB : F) {
-            
+            guardHeuristic(BB);
 
         }
         
