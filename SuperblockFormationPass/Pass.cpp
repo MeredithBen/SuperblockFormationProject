@@ -238,6 +238,8 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         }
         // ----------------------------------------------- tail duplication -----------------------------------------------------
         //if there is a block in the trace other than the header that has multiple predecessors, we need to tail duplicate that block and all remaining blocks in trace below it
+        std::vector<Value*> usesToReplace;
+        std::vector<Instruction*> phisToReplaceWith;
         ValueToValueMapTy VMap;
         for(Trace curr_trace : traces){
             BasicBlock* first_in_trace = curr_trace.getEntryBasicBlock();
@@ -272,7 +274,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                                 Instruction* terminator = pred->getTerminator();
                                 terminator->replaceSuccessorWith(bb_to_clone, cloned_bb);
                                 cloned_blocks.push_back(cloned_bb);
-                                //errs() << "The cloned bb is now: " << *cloned_bb << "\n";
+                                errs() << "The cloned bb is now: " << *cloned_bb << "\n";
                             }
                         }
                         //after cloning a basic block, need to fix up by adding phi nodes to the join point
@@ -281,6 +283,12 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                         //the join point will be all of the the immediate successors of the last block that was pushed back into cloned_blocks
                         BasicBlock* last_cloned = cloned_blocks.back();
                         for(BasicBlock* join_point : successors(last_cloned)){
+                            // //sanity check
+                            // for(BasicBlock* p : predecessors(join_point)){
+                            //     errs() << "the predecessor is: " << *p << "\n";
+                            // }
+
+                            errs() << "The join point is: " << *join_point << "\n";
                             for(Instruction& bb_inst : *bb_to_clone){
                                 if(!bb_inst.getType()->isVoidTy()){
                                     //if the instruction returns something, then it must added to a phi_node at join point
@@ -288,16 +296,26 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                                     for(Instruction& clone_inst : *cloned_bb){
                                         if(clone_inst.isIdenticalTo(&bb_inst)){ //then we have our two instructions to use in phi node!
                                             //cast instructions to values
-                                            llvm::Value* bb_inst_val = dyn_cast<Value>(&bb_inst);
-                                            llvm::Value* clone_inst_val = dyn_cast<Value>(&clone_inst);
+                                            Value* bb_inst_val = dyn_cast<Value>(&bb_inst);
+                                            Value* clone_inst_val = dyn_cast<Value>(&clone_inst);
 
                                             //create phi node and insert it at join point
                                             PHINode *phi = PHINode::Create(bb_inst_val->getType(), 0, Twine("phiNode"));
                                             phi->insertBefore(join_point->getFirstNonPHI()); 
 
-                                            //finally, add the two values along with their BBs to the phi node
+                                            //add the two values along with their BBs to the phi node
                                             phi->addIncoming(bb_inst_val, bb_to_clone);
                                             phi->addIncoming(clone_inst_val, cloned_bb);
+            
+                                            for(BasicBlock* p : predecessors(join_point)){
+                                                //Value* v = phi->getIncomingValueForBlock(p);
+                                                errs() << "the predecessor is: " << *p << "\n";
+                                            }
+                                        
+
+                                            //add instructions and phi nodes to vectors to later replace uses
+                                            usesToReplace.push_back(bb_inst_val);
+                                            phisToReplaceWith.push_back(phi);
                                         }
                                     }
                                 }
@@ -308,6 +326,14 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                 }
             }
         }
+        for (int i=0; i<usesToReplace.size(); i++){
+          Value* use = usesToReplace[i];
+          Instruction* phi = phisToReplaceWith[i];
+          Value* phi_val = dyn_cast<Value>(phi);
+          BasicBlock* join_point = phi->getParent();
+          use->replaceUsesOutsideBlock(phi_val, join_point);
+        }
+
         for (BasicBlock &BB : F){
           errs() << "Basic Block: " << BB << "\n";
         }
