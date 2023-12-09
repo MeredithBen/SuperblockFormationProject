@@ -24,6 +24,8 @@
 #include "llvm/IR/Dominators.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/ValueMapper.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DerivedTypes.h"
 
 #include <iostream>
 
@@ -283,11 +285,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                         //the join point will be all of the the immediate successors of the last block that was pushed back into cloned_blocks
                         BasicBlock* last_cloned = cloned_blocks.back();
                         for(BasicBlock* join_point : successors(last_cloned)){
-                            // //sanity check
-                            // for(BasicBlock* p : predecessors(join_point)){
-                            //     errs() << "the predecessor is: " << *p << "\n";
-                            // }
-
+                        
                             errs() << "The join point is: " << *join_point << "\n";
                             for(Instruction& bb_inst : *bb_to_clone){
                                 if(!bb_inst.getType()->isVoidTy()){
@@ -299,6 +297,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                                             Value* bb_inst_val = dyn_cast<Value>(&bb_inst);
                                             Value* clone_inst_val = dyn_cast<Value>(&clone_inst);
 
+
                                             //create phi node and insert it at join point
                                             PHINode *phi = PHINode::Create(bb_inst_val->getType(), 0, Twine("phiNode"));
                                             phi->insertBefore(join_point->getFirstNonPHI()); 
@@ -307,12 +306,11 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                                             phi->addIncoming(bb_inst_val, bb_to_clone);
                                             phi->addIncoming(clone_inst_val, cloned_bb);
             
-                                            for(BasicBlock* p : predecessors(join_point)){
-                                                //Value* v = phi->getIncomingValueForBlock(p);
-                                                errs() << "the predecessor is: " << *p << "\n";
-                                            }
+                                            // for(BasicBlock* p : predecessors(join_point)){
+                                            //     //Value* v = phi->getIncomingValueForBlock(p);
+                                            //     errs() << "the predecessor is: " << *p << "\n";
+                                            // }
                                         
-
                                             //add instructions and phi nodes to vectors to later replace uses
                                             usesToReplace.push_back(bb_inst_val);
                                             phisToReplaceWith.push_back(phi);
@@ -327,15 +325,37 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             }
         }
         for (int i=0; i<usesToReplace.size(); i++){
-          Value* use = usesToReplace[i];
-          Instruction* phi = phisToReplaceWith[i];
-          Value* phi_val = dyn_cast<Value>(phi);
-          BasicBlock* join_point = phi->getParent();
-          use->replaceUsesOutsideBlock(phi_val, join_point);
+            Value* use = usesToReplace[i];
+            Instruction* phi = phisToReplaceWith[i];
+            Value* phi_val = dyn_cast<Value>(phi);
+            BasicBlock* join_point = phi->getParent();
+
+
+            PHINode* phin = dyn_cast<PHINode>(phi);
+            errs() << "The phi val is complete: " << phin->isComplete() << "\n";
+            if(!phin->isComplete()){
+    
+                for(BasicBlock* par : predecessors(join_point)){
+                    //Value* temp_val = phin->getIncomingValueForBlock(par);
+                    for(int i=0; i<4; i++){
+                        int idx = phin->getBasicBlockIndex(par);
+                        if(idx == -1){ //if the parent basic block isn't in the phi, add incoming w/ dummy value
+                            // Type ty = phi_val->getType();
+                            // PointerType* pt_ty = PointerType::get(&ty);
+                            // ConstantPointerNull* v = ConstantPointerNull::get(pt_ty);
+                            Value* v = NULL; //can't assign a null value here
+                            phin->addIncoming(v, par);
+                            errs() << "Phi node is now " << *phin << "\n";
+                        }
+                    }
+                }
+            }
+            
+            use->replaceUsesOutsideBlock(phi_val, join_point);
         }
 
         for (BasicBlock &BB : F){
-          errs() << "Basic Block: " << BB << "\n";
+            errs() << "Basic Block: " << BB << "\n";
         }
 
 
