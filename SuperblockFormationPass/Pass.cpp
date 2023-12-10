@@ -43,6 +43,19 @@ BasicBlock* getLikelyBlock(BasicBlock* block){
     }
     return temp;
 }
+// // ------------------------------------ function to manage replacing uses ---------------------------------------------------
+// bool replaceUseInClonedBB(Use* u, std::vector<BasicBlock*> tail_list){
+//     errs() << "Checking if we should replace a use!\n";
+//     User* temp_u = u->getUser();
+//     Instruction* temp_i = dyn_cast<Instruction>(temp_u);
+//     BasicBlock* temp_bb = temp_i->getParent();
+//     if(std::find(tail_list.begin(), tail_list.end(), temp_bb) != tail_list.end()){
+//         return true;
+//     }else{
+//         return false;
+//     }
+// }
+
 
 // --------------------------------------- the growTrace function -------------------------------------------------------
 std::list<BasicBlock*> visited;
@@ -243,6 +256,9 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         std::vector<Value*> usesToReplace;
         std::vector<Instruction*> phisToReplaceWith;
         ValueToValueMapTy VMap;
+
+        std::vector<std::vector<BasicBlock*>> list_of_bb_to_clone_lists;
+        std::vector<std::vector<BasicBlock*>> list_of_tail_lists;
         for(Trace curr_trace : traces){
             BasicBlock* first_in_trace = curr_trace.getEntryBasicBlock();
             for(BasicBlock* curr_bb : curr_trace){
@@ -252,11 +268,15 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                     auto curr_index = curr_trace.getBlockIndex(curr_bb);
                     errs() << "The length of the trace is: " << trace_size << " and the index is "<< curr_index <<"\n";
                     
+                    std::vector<BasicBlock*> bb_to_clone_list;
+                    std::vector<BasicBlock*> tail_list;
                     std::list<BasicBlock*> cloned_blocks; //create a stack of cloned blocks in trace, pushing and popping from back
                     for(int i=curr_index; i<trace_size; i++){ //for all of the blocks in the trace after the side entrance
                         BasicBlock* bb_to_clone = curr_trace.getBlock(i); 
                         BasicBlock* cloned_bb = CloneBasicBlock(bb_to_clone, VMap);
                         cloned_bb->insertInto(&F); //insert the cloned_bb into the function
+                        tail_list.push_back(cloned_bb);
+                        bb_to_clone_list.push_back(bb_to_clone);
                         //errs() << "The cloned bb is: " << *cloned_bb <<"\n";
                         
                         //need to change the predecessors of the bb_to_clone and the cloned_bb
@@ -283,75 +303,123 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                         //for every variable that is assigned in the bb_to_clone, need to add a phi in join point with vals from bb_to_clone and cloned_bb
                         
                         //the join point will be all of the the immediate successors of the last block that was pushed back into cloned_blocks
-                        BasicBlock* last_cloned = cloned_blocks.back();
-                        for(BasicBlock* join_point : successors(last_cloned)){
+                        // BasicBlock* last_cloned = cloned_blocks.back();
+                        // for(BasicBlock* join_point : successors(last_cloned)){
                         
-                            errs() << "The join point is: " << *join_point << "\n";
-                            for(Instruction& bb_inst : *bb_to_clone){
-                                if(!bb_inst.getType()->isVoidTy()){
-                                    //if the instruction returns something, then it must added to a phi_node at join point
-                                    //then get the matching instruction from the cloned block
-                                    for(Instruction& clone_inst : *cloned_bb){
-                                        if(clone_inst.isIdenticalTo(&bb_inst)){ //then we have our two instructions to use in phi node!
-                                            //cast instructions to values
-                                            Value* bb_inst_val = dyn_cast<Value>(&bb_inst);
-                                            Value* clone_inst_val = dyn_cast<Value>(&clone_inst);
+                        //     errs() << "The join point is: " << *join_point << "\n";
+                        //     for(Instruction& bb_inst : *bb_to_clone){
+                        //         if(!bb_inst.getType()->isVoidTy()){
+                        //             //if the instruction returns something, then it must added to a phi_node at join point
+                        //             //then get the matching instruction from the cloned block
+                        //             for(Instruction& clone_inst : *cloned_bb){
+                        //                 if(clone_inst.isIdenticalTo(&bb_inst)){ //then we have our two instructions to use in phi node!
+                        //                     //cast instructions to values
+                        //                     Value* bb_inst_val = dyn_cast<Value>(&bb_inst);
+                        //                     Value* clone_inst_val = dyn_cast<Value>(&clone_inst);
 
+                        //                     //create phi node and insert it at join point
+                        //                     PHINode *phi = PHINode::Create(bb_inst_val->getType(), 0, Twine("phiNode"));
+                        //                     phi->insertBefore(join_point->getFirstNonPHI()); 
 
-                                            //create phi node and insert it at join point
-                                            PHINode *phi = PHINode::Create(bb_inst_val->getType(), 0, Twine("phiNode"));
-                                            phi->insertBefore(join_point->getFirstNonPHI()); 
-
-                                            //add the two values along with their BBs to the phi node
-                                            phi->addIncoming(bb_inst_val, bb_to_clone);
-                                            phi->addIncoming(clone_inst_val, cloned_bb);
+                        //                     //add the two values along with their BBs to the phi node
+                        //                     phi->addIncoming(bb_inst_val, bb_to_clone);
+                        //                     phi->addIncoming(clone_inst_val, cloned_bb);
             
-                                            // for(BasicBlock* p : predecessors(join_point)){
-                                            //     //Value* v = phi->getIncomingValueForBlock(p);
-                                            //     errs() << "the predecessor is: " << *p << "\n";
-                                            // }
-                                        
-                                            //add instructions and phi nodes to vectors to later replace uses
-                                            usesToReplace.push_back(bb_inst_val);
-                                            phisToReplaceWith.push_back(phi);
-                                        }
+                        //                     //add instructions and phi nodes to vectors to later replace uses
+                        //                     usesToReplace.push_back(bb_inst_val);
+                        //                     phisToReplaceWith.push_back(phi);
+                        //                 }
+                        //             }
+                        //         }
+                        //     }
+
+                        // }
+                    }
+                    list_of_tail_lists.push_back(tail_list);
+                    list_of_bb_to_clone_lists.push_back(bb_to_clone_list);
+                }
+            }
+        }
+        // for (int i=0; i<usesToReplace.size(); i++){
+        //     Value* use = usesToReplace[i];
+        //     Instruction* phi = phisToReplaceWith[i];
+        //     Value* phi_val = dyn_cast<Value>(phi);
+        //     BasicBlock* join_point = phi->getParent();
+
+
+        //     PHINode* phin = dyn_cast<PHINode>(phi);
+        //     errs() << "The phi val is complete: " << phin->isComplete() << "\n";
+        //     if(!phin->isComplete()){
+    
+        //         for(BasicBlock* par : predecessors(join_point)){
+        //             //Value* temp_val = phin->getIncomingValueForBlock(par);
+        //             for(int i=0; i<4; i++){
+        //                 int idx = phin->getBasicBlockIndex(par);
+        //                 if(idx == -1){ //if the parent basic block isn't in the phi, add incoming w/ dummy value
+        //                     // Type ty = phi_val->getType();
+        //                     // PointerType* pt_ty = PointerType::get(&ty);
+        //                     // ConstantPointerNull* v = ConstantPointerNull::get(pt_ty);
+        //                     Value* v = NULL; //can't assign a null value here
+        //                     phin->addIncoming(v, par);
+        //                     errs() << "Phi node is now " << *phin << "\n";
+        //                 }
+        //             }
+        //         }
+        //     }
+            
+        //     use->replaceUsesOutsideBlock(phi_val, join_point);
+        // }
+
+        std::vector<User*> user_list;
+        std::vector<Value*> bb_inst_val_list;
+        std::vector<Value*> clone_inst_val_list;
+
+        for(int i=0; i<list_of_tail_lists.size(); i++){
+            errs() << "Start of new duplicated tail. \n";
+            std::vector<BasicBlock*> tail_list = list_of_tail_lists[i];
+            std::vector<BasicBlock*> bb_to_clone_list = list_of_bb_to_clone_lists[i];
+
+            for(int j=0; j<tail_list.size(); j++){
+                BasicBlock* cloned_bb = tail_list[j];
+                BasicBlock* bb_to_clone = bb_to_clone_list[j];
+                errs() << "BB: " << *cloned_bb << "\n";
+
+                for(Instruction& bb_inst : *bb_to_clone){
+                    if(!bb_inst.getType()->isVoidTy()){
+                        //if the instruction returns something, then must find the matching instruction in cloned_bb and fix any following uses
+                        for(Instruction& clone_inst : *cloned_bb){
+                            if(clone_inst.isIdenticalTo(&bb_inst)){ 
+                                errs() << clone_inst << " is identical to " << bb_inst << "\n";
+                                //then need to go through each block in duplicated tail and replaces uses of bb_inst with clone_inst
+                                Value* bb_inst_val = dyn_cast<Value>(&bb_inst);
+                                Value* clone_inst_val = dyn_cast<Value>(&clone_inst);
+
+                                
+                                for(auto user : bb_inst_val->users()){  // get all users (instructions) of the value
+                                    Instruction* temp_i = dyn_cast<Instruction>(user);
+                                    BasicBlock* temp_bb = temp_i->getParent();
+                                    errs() << "The user of the bb_inst_val is " << *temp_i << "\n";
+                                    //if the basicblock that uses the instruction is in the tail list, replace with the cloned inst value
+                                    if(std::find(tail_list.begin(), tail_list.end(), temp_bb) != tail_list.end()){
+                                        //I can't actually change the instruction here, because then future instructions are 
+                                        //no longer identical when they should be. Change only after this loop finishes. 
+                                        errs() << "replacing " << *clone_inst_val << " with " << *bb_inst_val << "\n";
+                                        user_list.push_back(user);
+                                        bb_inst_val_list.push_back(bb_inst_val);
+                                        clone_inst_val_list.push_back(clone_inst_val);
+                                        //user->replaceUsesOfWith(bb_inst_val, clone_inst_val);
                                     }
+
                                 }
                             }
-
                         }
                     }
                 }
             }
         }
-        for (int i=0; i<usesToReplace.size(); i++){
-            Value* use = usesToReplace[i];
-            Instruction* phi = phisToReplaceWith[i];
-            Value* phi_val = dyn_cast<Value>(phi);
-            BasicBlock* join_point = phi->getParent();
-
-
-            PHINode* phin = dyn_cast<PHINode>(phi);
-            errs() << "The phi val is complete: " << phin->isComplete() << "\n";
-            if(!phin->isComplete()){
-    
-                for(BasicBlock* par : predecessors(join_point)){
-                    //Value* temp_val = phin->getIncomingValueForBlock(par);
-                    for(int i=0; i<4; i++){
-                        int idx = phin->getBasicBlockIndex(par);
-                        if(idx == -1){ //if the parent basic block isn't in the phi, add incoming w/ dummy value
-                            // Type ty = phi_val->getType();
-                            // PointerType* pt_ty = PointerType::get(&ty);
-                            // ConstantPointerNull* v = ConstantPointerNull::get(pt_ty);
-                            Value* v = NULL; //can't assign a null value here
-                            phin->addIncoming(v, par);
-                            errs() << "Phi node is now " << *phin << "\n";
-                        }
-                    }
-                }
-            }
-            
-            use->replaceUsesOutsideBlock(phi_val, join_point);
+        //replace register uses in tail duplicated BBs with their cloned value counterparts
+        for(int i=0; i<user_list.size(); i++){
+            user_list[i]->replaceUsesOfWith(bb_inst_val_list[i], clone_inst_val_list[i]);
         }
 
         for (BasicBlock &BB : F){
