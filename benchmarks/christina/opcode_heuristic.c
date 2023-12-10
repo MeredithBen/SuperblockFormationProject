@@ -6,7 +6,7 @@ int main(){
     k = 10;
     int *ptr = &j;
     int *ptr2 = &k;
-	while(j < 20) { // loop heuristic & branch direction heuristic
+	for (i =0; i < 10; i++) { // loop heuristic & branch direction heuristic
 		if (j < 0) //opcode heuristic
         {
             j++;

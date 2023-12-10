@@ -195,6 +195,34 @@ bool guardHeuristic(BasicBlock &BB) {
     return true;
 }
 
+BasicBlock * nextBB(BasicBlock &BB, bool isFirstBranch) {
+    errs() << "BB: " << BB<< "\n";
+    for (Instruction &I: BB) {
+        string opcode = I.getOpcodeName();
+        if (opcode == "br") {
+            if (I.getNumOperands() == 1) {
+                BasicBlock *returnBB = dyn_cast<BasicBlock>((I.getOperand(0)));
+                BasicBlock &refBB = *returnBB;
+                errs() << "refBB0:" << refBB << "\n";
+                return returnBB;
+            }
+            else if (I.getNumOperands() > 1 && (isFirstBranch)) {
+                BasicBlock *returnBB = dyn_cast<BasicBlock>((I.getOperand(1)));
+                BasicBlock &refBB = *returnBB;
+                errs() << "refBB1:" << refBB << "\n";
+                return returnBB;
+            }
+            else {
+                BasicBlock *returnBB = dyn_cast<BasicBlock>((I.getOperand(2)));
+                BasicBlock &refBB = *returnBB;
+                errs() << "refBB2:" << refBB << "\n";
+                return returnBB;
+            }
+        }
+    }
+    return &BB;
+}
+
 struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
 
     PreservedAnalyses run(Function &F, FunctionAnalysisManager &FAM) {
@@ -209,7 +237,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             BasicBlock *preheader = L->getLoopPreheader();
         }
         for (BasicBlock &BB : F) {
-            guardHeuristic(BB);
+            errs() << nextBB(BB, true);
 
         }
         

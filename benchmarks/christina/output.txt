@@ -1,22 +1,377 @@
-loadReg  %3 = alloca i32, align 4
-storeReg  %3 = alloca i32, align 4
-Istore:   store i32 %13, ptr %3, align 4
-loadVal:   %9 = load i32, ptr %3, align 4
-Icmp:   %10 = icmp slt i32 %9, 0
-Pred: 
-8:                                                ; preds = %5
-  %9 = load i32, ptr %3, align 4
-  %10 = icmp slt i32 %9, 0
-  br i1 %10, label %11, label %15, !prof !37
+BB: 
+  %1 = alloca i32, align 4
+  %2 = alloca i32, align 4
+  %3 = alloca i32, align 4
+  %4 = alloca i32, align 4
+  %5 = alloca ptr, align 8
+  %6 = alloca ptr, align 8
+  store i32 0, ptr %1, align 4
+  store i32 5, ptr %3, align 4
+  store i32 10, ptr %4, align 4
+  store ptr %3, ptr %5, align 8
+  store ptr %4, ptr %6, align 8
+  store i32 0, ptr %2, align 4
+  br label %7
 
-loadReg  %3 = alloca i32, align 4
-storeReg  %3 = alloca i32, align 4
-Istore:   store i32 %25, ptr %3, align 4
-loadVal:   %16 = load i32, ptr %3, align 4
-Icmp:   %17 = icmp sgt i32 %16, 0
-Pred: 
-15:                                               ; preds = %8
-  %16 = load i32, ptr %3, align 4
-  %17 = icmp sgt i32 %16, 0
-  br i1 %17, label %18, label %23, !prof !38
+refBB0:
+7:                                                ; preds = %86, %0
+  %8 = load i32, ptr %2, align 4
+  %9 = icmp slt i32 %8, 10
+  br i1 %9, label %10, label %89, !prof !36
 
+0x55ba61165900BB: 
+7:                                                ; preds = %86, %0
+  %8 = load i32, ptr %2, align 4
+  %9 = icmp slt i32 %8, 10
+  br i1 %9, label %10, label %89, !prof !36
+
+refBB1:
+89:                                               ; preds = %7
+  %90 = call i32 (ptr, ...) @printf(ptr noundef @.str.8)
+  ret i32 0
+
+0x55ba6116fd00BB: 
+10:                                               ; preds = %7
+  %11 = load i32, ptr %3, align 4
+  %12 = icmp slt i32 %11, 0
+  br i1 %12, label %13, label %17, !prof !37
+
+refBB1:
+17:                                               ; preds = %10
+  %18 = load i32, ptr %3, align 4
+  %19 = icmp sgt i32 0, %18
+  br i1 %19, label %20, label %22, !prof !37
+
+0x55ba6116f3a0BB: 
+13:                                               ; preds = %10
+  %14 = load i32, ptr %3, align 4
+  %15 = add nsw i32 %14, 1
+  store i32 %15, ptr %3, align 4
+  %16 = call i32 (ptr, ...) @printf(ptr noundef @.str)
+  br label %85
+
+refBB0:
+85:                                               ; preds = %84, %13
+  br label %86
+
+0x55ba6116fc60BB: 
+17:                                               ; preds = %10
+  %18 = load i32, ptr %3, align 4
+  %19 = icmp sgt i32 0, %18
+  br i1 %19, label %20, label %22, !prof !37
+
+refBB1:
+22:                                               ; preds = %17
+  %23 = load i32, ptr %3, align 4
+  %24 = icmp sgt i32 %23, 6
+  br i1 %24, label %25, label %29, !prof !37
+
+0x55ba6116f440BB: 
+20:                                               ; preds = %17
+  %21 = call i32 (ptr, ...) @printf(ptr noundef @.str)
+  br label %84
+
+refBB0:
+84:                                               ; preds = %83, %20
+  br label %85
+
+0x55ba6116fc10BB: 
+22:                                               ; preds = %17
+  %23 = load i32, ptr %3, align 4
+  %24 = icmp sgt i32 %23, 6
+  br i1 %24, label %25, label %29, !prof !37
+
+refBB1:
+29:                                               ; preds = %22
+  %30 = load i32, ptr %3, align 4
+  %31 = icmp eq i32 %30, 5
+  br i1 %31, label %32, label %36, !prof !38
+
+0x55ba6116f4e0BB: 
+25:                                               ; preds = %22
+  %26 = load i32, ptr %3, align 4
+  %27 = add nsw i32 %26, 1
+  store i32 %27, ptr %3, align 4
+  %28 = call i32 (ptr, ...) @printf(ptr noundef @.str.1)
+  br label %83
+
+refBB0:
+83:                                               ; preds = %82, %25
+  br label %84
+
+0x55ba6116fbc0BB: 
+29:                                               ; preds = %22
+  %30 = load i32, ptr %3, align 4
+  %31 = icmp eq i32 %30, 5
+  br i1 %31, label %32, label %36, !prof !38
+
+refBB1:
+36:                                               ; preds = %29
+  %37 = load i32, ptr %3, align 4
+  %38 = sitofp i32 %37 to double
+  %39 = fcmp oeq double %38, 0x40092A593A2DF938
+  br i1 %39, label %40, label %42, !prof !39
+
+0x55ba6116f580BB: 
+32:                                               ; preds = %29
+  %33 = load i32, ptr %3, align 4
+  %34 = add nsw i32 %33, 1
+  store i32 %34, ptr %3, align 4
+  %35 = call i32 (ptr, ...) @printf(ptr noundef @.str.2)
+  br label %82
+
+refBB0:
+82:                                               ; preds = %81, %32
+  br label %83
+
+0x55ba6116fb70BB: 
+36:                                               ; preds = %29
+  %37 = load i32, ptr %3, align 4
+  %38 = sitofp i32 %37 to double
+  %39 = fcmp oeq double %38, 0x40092A593A2DF938
+  br i1 %39, label %40, label %42, !prof !39
+
+refBB1:
+42:                                               ; preds = %36
+  %43 = load ptr, ptr %5, align 8
+  %44 = icmp ne ptr %43, null
+  br i1 %44, label %45, label %47, !prof !40
+
+0x55ba6116f620BB: 
+40:                                               ; preds = %36
+  %41 = call i32 (ptr, ...) @printf(ptr noundef @.str.3)
+  br label %81
+
+refBB0:
+81:                                               ; preds = %80, %40
+  br label %82
+
+0x55ba6116fb20BB: 
+42:                                               ; preds = %36
+  %43 = load ptr, ptr %5, align 8
+  %44 = icmp ne ptr %43, null
+  br i1 %44, label %45, label %47, !prof !40
+
+refBB1:
+47:                                               ; preds = %42
+  %48 = load ptr, ptr %5, align 8
+  %49 = icmp eq ptr %48, null
+  br i1 %49, label %50, label %52
+
+0x55ba6116f6c0BB: 
+45:                                               ; preds = %42
+  %46 = call i32 (ptr, ...) @printf(ptr noundef @.str.4)
+  br label %80
+
+refBB0:
+80:                                               ; preds = %79, %45
+  br label %81
+
+0x55ba6116fad0BB: 
+47:                                               ; preds = %42
+  %48 = load ptr, ptr %5, align 8
+  %49 = icmp eq ptr %48, null
+  br i1 %49, label %50, label %52
+
+refBB1:
+52:                                               ; preds = %47
+  %53 = load ptr, ptr %5, align 8
+  %54 = load ptr, ptr %6, align 8
+  %55 = icmp ne ptr %53, %54
+  br i1 %55, label %56, label %58
+
+0x55ba6116f760BB: 
+50:                                               ; preds = %47
+  %51 = call i32 (ptr, ...) @printf(ptr noundef @.str.5)
+  br label %79
+
+refBB0:
+79:                                               ; preds = %78, %50
+  br label %80
+
+0x55ba6116fa80BB: 
+52:                                               ; preds = %47
+  %53 = load ptr, ptr %5, align 8
+  %54 = load ptr, ptr %6, align 8
+  %55 = icmp ne ptr %53, %54
+  br i1 %55, label %56, label %58
+
+refBB1:
+58:                                               ; preds = %52
+  %59 = load ptr, ptr %5, align 8
+  %60 = load ptr, ptr %6, align 8
+  %61 = icmp eq ptr %59, %60
+  br i1 %61, label %62, label %64
+
+0x55ba6116f800BB: 
+56:                                               ; preds = %52
+  %57 = call i32 (ptr, ...) @printf(ptr noundef @.str.4)
+  br label %78
+
+refBB0:
+78:                                               ; preds = %77, %56
+  br label %79
+
+0x55ba6116fa30BB: 
+58:                                               ; preds = %52
+  %59 = load ptr, ptr %5, align 8
+  %60 = load ptr, ptr %6, align 8
+  %61 = icmp eq ptr %59, %60
+  br i1 %61, label %62, label %64
+
+refBB1:
+64:                                               ; preds = %58
+  %65 = load i32, ptr %3, align 4
+  %66 = icmp sgt i32 %65, 0
+  br i1 %66, label %67, label %72
+
+0x55ba6116f8a0BB: 
+62:                                               ; preds = %58
+  %63 = call i32 (ptr, ...) @printf(ptr noundef @.str.5)
+  br label %77
+
+refBB0:
+77:                                               ; preds = %76, %62
+  br label %78
+
+0x55ba6116f9e0BB: 
+64:                                               ; preds = %58
+  %65 = load i32, ptr %3, align 4
+  %66 = icmp sgt i32 %65, 0
+  br i1 %66, label %67, label %72
+
+refBB1:
+72:                                               ; preds = %64
+  %73 = load i32, ptr %4, align 4
+  %74 = sdiv i32 %73, 2
+  store i32 %74, ptr %4, align 4
+  %75 = call i32 (ptr, ...) @printf(ptr noundef @.str.7)
+  br label %76
+
+0x55ba6116f940BB: 
+67:                                               ; preds = %64
+  %68 = load i32, ptr %4, align 4
+  %69 = load i32, ptr %3, align 4
+  %70 = sdiv i32 %68, %69
+  store i32 %70, ptr %4, align 4
+  %71 = call i32 (ptr, ...) @printf(ptr noundef @.str.6)
+  br label %76
+
+refBB0:
+76:                                               ; preds = %72, %67
+  br label %77
+
+0x55ba6116f990BB: 
+72:                                               ; preds = %64
+  %73 = load i32, ptr %4, align 4
+  %74 = sdiv i32 %73, 2
+  store i32 %74, ptr %4, align 4
+  %75 = call i32 (ptr, ...) @printf(ptr noundef @.str.7)
+  br label %76
+
+refBB0:
+76:                                               ; preds = %72, %67
+  br label %77
+
+0x55ba6116f990BB: 
+76:                                               ; preds = %72, %67
+  br label %77
+
+refBB0:
+77:                                               ; preds = %76, %62
+  br label %78
+
+0x55ba6116f9e0BB: 
+77:                                               ; preds = %76, %62
+  br label %78
+
+refBB0:
+78:                                               ; preds = %77, %56
+  br label %79
+
+0x55ba6116fa30BB: 
+78:                                               ; preds = %77, %56
+  br label %79
+
+refBB0:
+79:                                               ; preds = %78, %50
+  br label %80
+
+0x55ba6116fa80BB: 
+79:                                               ; preds = %78, %50
+  br label %80
+
+refBB0:
+80:                                               ; preds = %79, %45
+  br label %81
+
+0x55ba6116fad0BB: 
+80:                                               ; preds = %79, %45
+  br label %81
+
+refBB0:
+81:                                               ; preds = %80, %40
+  br label %82
+
+0x55ba6116fb20BB: 
+81:                                               ; preds = %80, %40
+  br label %82
+
+refBB0:
+82:                                               ; preds = %81, %32
+  br label %83
+
+0x55ba6116fb70BB: 
+82:                                               ; preds = %81, %32
+  br label %83
+
+refBB0:
+83:                                               ; preds = %82, %25
+  br label %84
+
+0x55ba6116fbc0BB: 
+83:                                               ; preds = %82, %25
+  br label %84
+
+refBB0:
+84:                                               ; preds = %83, %20
+  br label %85
+
+0x55ba6116fc10BB: 
+84:                                               ; preds = %83, %20
+  br label %85
+
+refBB0:
+85:                                               ; preds = %84, %13
+  br label %86
+
+0x55ba6116fc60BB: 
+85:                                               ; preds = %84, %13
+  br label %86
+
+refBB0:
+86:                                               ; preds = %85
+  %87 = load i32, ptr %2, align 4
+  %88 = add nsw i32 %87, 1
+  store i32 %88, ptr %2, align 4
+  br label %7, !llvm.loop !41
+
+0x55ba6116fcb0BB: 
+86:                                               ; preds = %85
+  %87 = load i32, ptr %2, align 4
+  %88 = add nsw i32 %87, 1
+  store i32 %88, ptr %2, align 4
+  br label %7, !llvm.loop !41
+
+refBB0:
+7:                                                ; preds = %86, %0
+  %8 = load i32, ptr %2, align 4
+  %9 = icmp slt i32 %8, 10
+  br i1 %9, label %10, label %89, !prof !36
+
+0x55ba61165900BB: 
+89:                                               ; preds = %7
+  %90 = call i32 (ptr, ...) @printf(ptr noundef @.str.8)
+  ret i32 0
+
+0x55ba6116fd00
