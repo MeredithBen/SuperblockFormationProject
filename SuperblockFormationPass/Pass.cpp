@@ -422,6 +422,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             user_list[i]->replaceUsesOfWith(bb_inst_val_list[i], clone_inst_val_list[i]);
         }
 
+        //print out basic blocks
         for (BasicBlock &BB : F){
             errs() << "Basic Block: " << BB << "\n";
         }
