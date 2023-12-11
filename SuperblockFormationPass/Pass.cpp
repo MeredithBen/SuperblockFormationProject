@@ -32,16 +32,6 @@
 using namespace llvm;
 using namespace std;
 
-// // ------------------------------------ top level heuristics function ---------------------------------------------------
-// BasicBlock* getLikelyBlock(BasicBlock* block){
-//     //implement function to return the most likely successor of a basic block
-//         // for now, returns just the first successor
-//     BasicBlock* temp;
-//     for(BasicBlock* bb : successors(block)){
-//         temp = bb;
-//     }
-//     return temp;
-// }
 
 struct RelBranch {
     BasicBlock *bb;
@@ -200,6 +190,7 @@ void opcodeHeuristic(BasicBlock &BB) {
         }   
         
     }
+    errs() << "opcode heuristics are not applied\n";
 }
 
 //Gets all preds based on the current basic block
@@ -465,7 +456,7 @@ void runHeuristics(Function &F, llvm::LoopAnalysis::Result &li) {
         
 }
 
-BasicBlock* getMostLikely(BasicBlock* curr) {
+BasicBlock* getMostLikely(BasicBlock* curr, llvm::BranchProbabilityAnalysis::Result &bpi) {
     for (auto& branch : relbranch) {
         if (curr == branch.bb) {
             bool path = branch.dir;
@@ -477,6 +468,24 @@ BasicBlock* getMostLikely(BasicBlock* curr) {
             }
         }
     }
+
+    BasicBlock* succ1 = curr->getTerminator()->getSuccessor(0);
+    BasicBlock* succ2 = curr->getTerminator()->getSuccessor(1);
+    BranchProbability prob1 = bpi.getEdgeProbability(curr, succ1);
+    BranchProbability prob2 = bpi.getEdgeProbability(curr, succ2);
+    uint64_t num1 = prob1.getNumerator();
+    uint64_t den1 = prob1.getDenominator();
+    double ratio1 = num1/ static_cast<double>(den1);
+    uint64_t num2 = prob2.getNumerator();
+    uint64_t den2 = prob2.getDenominator();
+    double ratio2 = num2/ static_cast<double>(den2);
+    if (ratio1 > ratio2) {
+        return succ1;
+    }
+    else {
+        return succ2;
+    }
+
     errs() << "couldn't find a successor, something wrong\n";
     exit(0);
 }
@@ -506,7 +515,7 @@ double getAccuracy(Function &F, llvm::BranchProbabilityAnalysis::Result &bpi, ll
             else {
                 prsum += ratio2;
             }
-            BasicBlock* mostLikely = getMostLikely(&BB);
+            BasicBlock* mostLikely = getMostLikely(&BB, bpi);
             if (mostLikely == succ1) {
                 stsum += ratio1;
             }
@@ -521,7 +530,7 @@ double getAccuracy(Function &F, llvm::BranchProbabilityAnalysis::Result &bpi, ll
 // --------------------------------------- the growTrace function -------------------------------------------------------
 std::list<BasicBlock*> visited;
 
-Trace growTrace(BasicBlock* current_block, DominatorTree& dom_tree){
+Trace growTrace(BasicBlock* current_block, DominatorTree& dom_tree, llvm::BranchProbabilityAnalysis::Result &bpi){
     //initialize trace with current_block
     std::vector<BasicBlock*> trace_blocks;
     trace_blocks.push_back(current_block);
@@ -551,7 +560,7 @@ Trace growTrace(BasicBlock* current_block, DominatorTree& dom_tree){
             likely_block = current_block->getSingleSuccessor();
         }else{
             //then call the heuristics function and pass the current block to it, receive the optimal successor in return
-            likely_block = getMostLikely(current_block); //needs to account for coming out of the loop -- loop heuristic should do that.
+            likely_block = getMostLikely(current_block, bpi); //needs to account for coming out of the loop -- loop heuristic should do that.
         }
         //check if likely_block has been visited, and if not, add it to the trace
         if (std::find(visited.begin(), visited.end(), likely_block) == visited.end()){
@@ -664,7 +673,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             for(BasicBlock* current_block : bfs_blocks){
                 if (std::find(visited.begin(), visited.end(), current_block) == visited.end()){
                     // the current_block has not been visited
-                    Trace temp_trace = growTrace(current_block, dt);
+                    Trace temp_trace = growTrace(current_block, dt, bpi);
                     traces.push_back(temp_trace);
                     errs() << "New trace --------------------------------------------- \n";
                     for(BasicBlock* bb : temp_trace){
@@ -705,7 +714,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         for(BasicBlock* current_block : bfs_function_blocks){
             if (std::find(visited.begin(), visited.end(), current_block) == visited.end()){
                 // the current_block has not been visited
-                Trace temp_trace = growTrace(current_block, dt);
+                Trace temp_trace = growTrace(current_block, dt, bpi);
                 traces.push_back(temp_trace);
                 errs() << "New trace --------------------------------------------- \n";
                 for(BasicBlock* bb : temp_trace){
@@ -726,6 +735,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             for(BasicBlock* curr_bb : curr_trace){
                 if(curr_bb->hasNPredecessorsOrMore(2) && curr_bb != first_in_trace){
                     //if there is a block in the trace that has 2 or more predecessors, and it isn't the header, need to tail-duplicate
+            
                     auto trace_size = curr_trace.size();
                     auto curr_index = curr_trace.getBlockIndex(curr_bb);
                     errs() << "The length of the trace is: " << trace_size << " and the index is "<< curr_index <<"\n";
@@ -735,32 +745,46 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                     std::list<BasicBlock*> cloned_blocks; //create a stack of cloned blocks in trace, pushing and popping from back
                     for(int i=curr_index; i<trace_size; i++){ //for all of the blocks in the trace after the side entrance
                         BasicBlock* bb_to_clone = curr_trace.getBlock(i); 
-                        BasicBlock* cloned_bb = CloneBasicBlock(bb_to_clone, VMap);
-                        cloned_bb->insertInto(&F); //insert the cloned_bb into the function
-                        tail_list.push_back(cloned_bb);
-                        bb_to_clone_list.push_back(bb_to_clone);
-                        //errs() << "The cloned bb is: " << *cloned_bb <<"\n";
                         
-                        //need to change the predecessors of the bb_to_clone and the cloned_bb
-                        for(BasicBlock* pred : predecessors(bb_to_clone)){
-                            //if the basic block only has one predecessor, then it is the second/third/etc in the trace
-                            if(!bb_to_clone->hasNPredecessorsOrMore(2)){ 
-                                //need to connect cloned_bb as a successor of the previously cloned block
-                                BasicBlock* latest_clone = cloned_blocks.back();
-                                cloned_blocks.pop_back();
-                                Instruction* terminator = latest_clone->getTerminator();
-                                terminator->replaceSuccessorWith(bb_to_clone, cloned_bb);
-                                cloned_blocks.push_back(cloned_bb);
-                            }
-                            //if bb has more than one predecssor, one pred is in trace and should stay connected to bb_to_clone
-                                //but other pred not in trace and should renove connection to curr_bb and instead connect to cloned_bb
-                            else if(std::find(curr_trace.begin(), curr_trace.end(), pred) == curr_trace.end()){
-                                Instruction* terminator = pred->getTerminator();
-                                terminator->replaceSuccessorWith(bb_to_clone, cloned_bb);
-                                cloned_blocks.push_back(cloned_bb);
-                                errs() << "The cloned bb is now: " << *cloned_bb << "\n";
+                        //check if the BB has multiple predecessors but they are all in the trace
+                        bool needToClone = false;
+                        for(BasicBlock* parent : predecessors(bb_to_clone)){
+                            if(std::find(curr_trace.begin(), curr_trace.end(), parent) == curr_trace.end()){
+                                needToClone = true; //if there is a parent that is not in the trace, we need to clone
+                                errs() << "We need to clone: " << *bb_to_clone << "\n";
                             }
                         }
+                        if(needToClone){
+                            BasicBlock* cloned_bb = CloneBasicBlock(bb_to_clone, VMap);
+                            cloned_bb->insertInto(&F); //insert the cloned_bb into the function
+                            tail_list.push_back(cloned_bb);
+                            bb_to_clone_list.push_back(bb_to_clone);
+                            //errs() << "The cloned bb is: " << *cloned_bb <<"\n";
+                            
+                            //need to change the predecessors of the bb_to_clone and the cloned_bb
+                            for(BasicBlock* pred : predecessors(bb_to_clone)){ 
+                                //if the basic block only has one predecessor, then it is the second/third/etc in the trace
+                                if(!bb_to_clone->hasNPredecessorsOrMore(2)){ 
+                                    //need to connect cloned_bb as a successor of the previously cloned block
+                                    BasicBlock* latest_clone = cloned_blocks.back();
+                                    cloned_blocks.pop_back();
+                                    Instruction* terminator = latest_clone->getTerminator();
+                                    terminator->replaceSuccessorWith(bb_to_clone, cloned_bb);
+                                    cloned_blocks.push_back(cloned_bb);
+                                    errs() << "The cloned bb (only one pred) is now: " << *cloned_bb << "\n";
+                                }
+                                //if bb has more than one predecssor, one pred is in trace and should stay connected to bb_to_clone
+                                    //but other pred not in trace and should renove connection to curr_bb and instead connect to cloned_bb
+                                else if(std::find(curr_trace.begin(), curr_trace.end(), pred) == curr_trace.end()){
+                                    errs() << "We need to clone this multi pred block! " << *bb_to_clone << "\n";
+                                    Instruction* terminator = pred->getTerminator();
+                                    terminator->replaceSuccessorWith(bb_to_clone, cloned_bb);
+                                    cloned_blocks.push_back(cloned_bb);
+                                    errs() << "The cloned bb is now: " << *cloned_bb << "\n";
+                                }
+                            }
+                        }
+                        
                         //after cloning a basic block, need to fix up by adding phi nodes to the join point
                         //for every variable that is assigned in the bb_to_clone, need to add a phi in join point with vals from bb_to_clone and cloned_bb
                         
@@ -890,8 +914,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         //     errs() << "Basic Block: " << BB << "\n";
         // }
 
-        //-------------------------------------- Riya + Christina's pass code ---------------------------------------------------
-        
+        //calculate accuracy compared to profile information
         double acc = getAccuracy(F, bpi, li);
         errs() << "Accuracy is: " << acc << "\n";
 
