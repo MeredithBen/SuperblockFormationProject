@@ -6,7 +6,7 @@ int main(){
     k = 10;
     int *ptr = &j;
     int *ptr2 = &k;
-	for(int l=5; l < 10; l++) { // loop heuristic & branch direction heuristic
+	for (i =0; i < 10; i++) { // loop heuristic & branch direction heuristic
 		if (j < 0) //opcode heuristic
         {
             j++;
@@ -19,14 +19,14 @@ int main(){
             j++;
             printf("Neg opcode heuristic taken!");
         }
-        if (j == 5) {
+        else if (j == 5) {
             j++;
             printf("FP opcode heuristic taken!");
         }
         else if (j == 3.145678) {
             printf("FP opcode heuristic not taken!");
         }
-        if (ptr != NULL) {
+        else if (ptr != NULL) {
             printf("ptr heuristic taken");
         }
         else if (ptr == NULL) {
@@ -38,7 +38,7 @@ int main(){
         else if (ptr == ptr2) {
             printf("ptr heuristic not taken");
         }
-        if (j > 0){ // guard heuristic
+        else if (j > 0){ // guard heuristic
             k=k/j;
             printf("guard heuristic taken!");
         }

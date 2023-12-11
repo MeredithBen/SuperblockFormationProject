@@ -32,16 +32,6 @@
 using namespace llvm;
 using namespace std;
 
-// // ------------------------------------ top level heuristics function ---------------------------------------------------
-// BasicBlock* getLikelyBlock(BasicBlock* block){
-//     //implement function to return the most likely successor of a basic block
-//         // for now, returns just the first successor
-//     BasicBlock* temp;
-//     for(BasicBlock* bb : successors(block)){
-//         temp = bb;
-//     }
-//     return temp;
-// }
 
 struct RelBranch {
     BasicBlock *bb;
@@ -152,14 +142,185 @@ bool isNegativeComparison (Instruction &I) {
 
 void opcodeHeuristic(BasicBlock &BB) {
     for (Instruction &I : BB) {
-        if (isNegativeComparison(I)) {
-            errs() << "I Not taken" << I << "\n";
+        if (isUsedByBranch(I) && isa<ICmpInst>(&I)) {
+            if (isNegativeComparison(I)) {
+                string userOpcode = I.getOpcodeName();
+                ICmpInst *ICC = dyn_cast<ICmpInst>(&I);
+                llvm::CmpInst::Predicate pr=ICC->getSignedPredicate();
+                llvm::Value* passop1 = I.getOperand(0);
+                llvm::Value* passop2 = I.getOperand(1);
+                std::list<std::pair<llvm::Value*, llvm::Value*>> oppair = {std::make_pair(passop1, passop2)};
+                errs() << "I Not taken" << I << "\n";
+                relatedBranchesHeuristic(&BB, userOpcode, pr, oppair, 3, false);
+            }
+            else {
+                string userOpcode = I.getOpcodeName();
+                ICmpInst *ICC = dyn_cast<ICmpInst>(&I);
+                llvm::CmpInst::Predicate pr=ICC->getSignedPredicate();
+                llvm::Value* passop1 = I.getOperand(0);
+                llvm::Value* passop2 = I.getOperand(1);
+                std::list<std::pair<llvm::Value*, llvm::Value*>> oppair = {std::make_pair(passop1, passop2)};
+                relatedBranchesHeuristic(&BB, userOpcode, pr, oppair, 3, true);
+            }
         }
-        else if (isFloatingPt(I)) {
-            errs() << "I Not taken" << I << "\n";
-        }
+        else if (FCmpInst *FCC = dyn_cast<FCmpInst>(&I)) {
+            if (isFloatingPt(I)) {
+                errs() << "I Not taken" << I << "\n";
+                
+                string userOpcode = I.getOpcodeName();
+                
+                FCmpInst *FCC = dyn_cast<FCmpInst>(&I);
+                llvm::CmpInst::Predicate pr=FCC->getSignedPredicate();
+                
+                llvm::Value* passop1 = I.getOperand(0);
+                
+                llvm::Value* passop2 = I.getOperand(1);
+                std::list<std::pair<llvm::Value*, llvm::Value*>> oppair = {std::make_pair(passop1, passop2)};
+                relatedBranchesHeuristic(&BB, userOpcode, pr, oppair, 3, false);
+            }
+            else {
+                string userOpcode = I.getOpcodeName();
+                ICmpInst *ICC = dyn_cast<ICmpInst>(&I);
+                llvm::CmpInst::Predicate pr=ICC->getSignedPredicate();
+                llvm::Value* passop1 = I.getOperand(0);
+                llvm::Value* passop2 = I.getOperand(1);
+                std::list<std::pair<llvm::Value*, llvm::Value*>> oppair = {std::make_pair(passop1, passop2)};
+                relatedBranchesHeuristic(&BB, userOpcode, pr, oppair, 3, true);
+            }
+        }   
         
     }
+}
+
+//Gets all preds based on the current basic block
+unordered_map<BasicBlock *, BasicBlock *> createPredsMap(BasicBlock &BB, llvm::LoopAnalysis::Result &li) {
+    std::unordered_map<BasicBlock *, BasicBlock *> PredsMap;
+    std::queue<BasicBlock *> PredsQueue;
+    for (Loop *L : li) {
+        BasicBlock *currBB = L->getHeader();
+        BasicBlock *latch = L->getLoopLatch();
+        while (currBB != latch) {
+            for (BasicBlock *Pred : predecessors(currBB)) {
+                PredsQueue.push(Pred);
+                PredsMap[Pred] = currBB;
+            }
+            currBB = PredsQueue.front();
+            PredsQueue.pop();
+        }
+    }
+    return PredsMap;
+    
+}
+
+bool branchDirectionHeuristic(BasicBlock &BB, llvm::LoopAnalysis::Result &li) {
+    std::unordered_map<BasicBlock *, BasicBlock *> PredsMap = createPredsMap(BB, li);
+    for (Instruction &I : BB) {
+        string opcode = I.getOpcodeName();
+        if (opcode == "br") {
+            for (unsigned i = 0; i < I.getNumOperands(); i++) {
+                BasicBlock *opBB = dyn_cast<BasicBlock>(I.getOperand(i));
+                if (PredsMap.find(opBB) != PredsMap.end()) {
+                    ICmpInst *ICC = dyn_cast<ICmpInst>(&I);
+                    llvm::CmpInst::Predicate pr;
+                    Value* passop1 = NULL;
+                    Value* passop2 = NULL;
+                    std::list<std::pair<llvm::Value*, llvm::Value*>> oppair = {std::make_pair(passop1, passop2)};
+                    relatedBranchesHeuristic(&BB, opcode, pr, oppair, 5, true);
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
+}
+
+// Finds store instruction
+// Gets the predecessor of that instruction
+// Gets the ICMP related to that predecessor's branch instruction
+// Gets the registers used in the ICMP
+// Checks if the registers were loaded with the same value as the store instruction
+// returns false if the same value was stored and loaded (The value was overwritten inside of the branch)
+// returns true if not.
+bool guardHeuristic(BasicBlock &BB) {
+    for (Instruction &Istore : BB) {
+        string opcode3 = Istore.getOpcodeName();
+        string opcode1 = Istore.getOpcodeName();
+        if (opcode1 == "store" && (Istore.getNumOperands() > 1)) {
+            Value &storeReg = *Istore.getOperand(1);
+            for (BasicBlock *Pred : predecessors(&BB)) {
+                for (Instruction &Icmp : *Pred) {
+                    Value &loadVal = *Icmp.getOperand(0);
+                    if (Instruction *loadInstr = dyn_cast<Instruction>(&loadVal)) {
+                        string opcode2 = loadInstr->getOpcodeName();
+                        if (isUsedByBranch(Icmp) && isa<ICmpInst>(&Icmp) && (opcode2 =="load") ) {
+                            for (unsigned i = 0; i < loadInstr->getNumOperands(); i++) {
+                                Value &loadReg = *loadInstr->getOperand(0);
+                                if (&loadReg == &storeReg) {
+                                    errs() << "loadReg" << loadReg << "\n";
+                                    errs() << "storeReg" << storeReg << "\n";
+                                    errs() << "Istore: " << Istore << "\n";
+                                    errs() << "loadVal: " << loadVal << "\n";
+                                    errs() << "Icmp: " << Icmp << "\n";
+                                    errs() << "Pred: " << *Pred << "\n";
+                                    if(opcode3 == "icmp" && isUsedByBranch(Istore)) {
+                                        string userOpcode = opcode3;
+                                        ICmpInst *ICC = dyn_cast<ICmpInst>(&Istore);
+                                        llvm::CmpInst::Predicate pr=ICC->getSignedPredicate();
+                                        llvm::Value* passop1 = Istore.getOperand(0);
+                                        llvm::Value* passop2 = Istore.getOperand(1);
+                                        std::list<std::pair<llvm::Value*, llvm::Value*>> oppair = {std::make_pair(passop1, passop2)};
+                                        relatedBranchesHeuristic(&BB, userOpcode, pr, oppair, 4, true);
+                                    }
+                                    
+                                    return true;
+                                }
+                                else {
+                                    if(opcode3 == "icmp" && isUsedByBranch(Istore)) {
+                                        string userOpcode = opcode3;
+                                        ICmpInst *ICC = dyn_cast<ICmpInst>(&Istore);
+                                        llvm::CmpInst::Predicate pr=ICC->getSignedPredicate();
+                                        llvm::Value* passop1 = Istore.getOperand(0);
+                                        llvm::Value* passop2 = Istore.getOperand(1);
+                                        std::list<std::pair<llvm::Value*, llvm::Value*>> oppair = {std::make_pair(passop1, passop2)};
+                                        relatedBranchesHeuristic(&BB, userOpcode, pr, oppair, 4, false);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    return false;
+}
+
+BasicBlock * nextBB(BasicBlock &BB, bool isFirstBranch) {
+    errs() << "BB: " << BB<< "\n";
+    for (Instruction &I: BB) {
+        string opcode = I.getOpcodeName();
+        if (opcode == "br") {
+            if (I.getNumOperands() == 1) {
+                BasicBlock *returnBB = dyn_cast<BasicBlock>((I.getOperand(0)));
+                BasicBlock &refBB = *returnBB;
+                errs() << "refBB0:" << refBB << "\n";
+                return returnBB;
+            }
+            else if (I.getNumOperands() > 1 && (isFirstBranch)) {
+                BasicBlock *returnBB = dyn_cast<BasicBlock>((I.getOperand(1)));
+                BasicBlock &refBB = *returnBB;
+                errs() << "refBB1:" << refBB << "\n";
+                return returnBB;
+            }
+            else {
+                BasicBlock *returnBB = dyn_cast<BasicBlock>((I.getOperand(2)));
+                BasicBlock &refBB = *returnBB;
+                errs() << "refBB2:" << refBB << "\n";
+                return returnBB;
+            }
+        }
+    }
+    return &BB;
 }
 
 bool isPointerEqual (Instruction &I) {
@@ -187,56 +348,58 @@ int pointerHeuristic(BasicBlock &BB) {
         if (userOpcode == "icmp") {
             errs() << "the instr is " << I << "\n";
             // auto temp = dyn_cast<Instruction>(I.getOperand(0));
-            auto I1 = dyn_cast<Instruction>(I.getOperand(0));
-            if (isa<LoadInst>(I1)) {
-                auto temp = dyn_cast<Instruction>(I1->getOperand(0));
-                string tempOpcode = temp->getOpcodeName();
-                if (tempOpcode == "getelementptr") {
-                    auto I2 = dyn_cast<Instruction>(I.getOperand(1));
-                    if (isa<LoadInst>(I2)) {
-                        auto temp2 = dyn_cast<Instruction>(I2->getOperand(0));
-                        string tempOpcode2 = temp2->getOpcodeName();
-                        if (tempOpcode2 == "getelementptr") {
-                            ICmpInst *ICC = dyn_cast<ICmpInst>(&I);
-                            llvm::CmpInst::Predicate pr=ICC->getSignedPredicate();
-                            llvm::Value* passop1 = I.getOperand(0);
-                            llvm::Value* passop2 = I.getOperand(1);
-                            std::list<std::pair<llvm::Value*, llvm::Value*>> oppair = {std::make_pair(passop1, passop2)};
-                            if (isPointerEqual(I)) {
-                                errs() << "Second label is taken (corresponding to else path)" << "\n";
-                                relatedBranchesHeuristic(&BB, userOpcode, pr, oppair, 1, false);
-                                return 2;
-                            }
-                            else {
-                                errs() << "First label is taken (corresponding to if path)" << "\n";
-                                relatedBranchesHeuristic(&BB, userOpcode, pr, oppair, 1, true);
-                                return 1;
+            if (auto I1 = dyn_cast<Instruction>(I.getOperand(0))) {
+                if (isa<LoadInst>(I1)) {
+                    auto temp = dyn_cast<Instruction>(I1->getOperand(0));
+                    string tempOpcode = temp->getOpcodeName();
+                    if (tempOpcode == "getelementptr") {
+                        auto I2 = dyn_cast<Instruction>(I.getOperand(1));
+                        if (isa<LoadInst>(I2)) {
+                            auto temp2 = dyn_cast<Instruction>(I2->getOperand(0));
+                            string tempOpcode2 = temp2->getOpcodeName();
+                            if (tempOpcode2 == "getelementptr") {
+                                ICmpInst *ICC = dyn_cast<ICmpInst>(&I);
+                                llvm::CmpInst::Predicate pr=ICC->getSignedPredicate();
+                                llvm::Value* passop1 = I.getOperand(0);
+                                llvm::Value* passop2 = I.getOperand(1);
+                                std::list<std::pair<llvm::Value*, llvm::Value*>> oppair = {std::make_pair(passop1, passop2)};
+                                if (isPointerEqual(I)) {
+                                    errs() << "Second label is taken (corresponding to else path)" << "\n";
+                                    relatedBranchesHeuristic(&BB, userOpcode, pr, oppair, 1, false);
+                                    return 2;
+                                }
+                                else {
+                                    errs() << "First label is taken (corresponding to if path)" << "\n";
+                                    relatedBranchesHeuristic(&BB, userOpcode, pr, oppair, 1, true);
+                                    return 1;
+                                }
                             }
                         }
+                        
                     }
-                    
-                }
-                else if (I.getOperand(1) == nullptr) {
-                    ICmpInst *ICC = dyn_cast<ICmpInst>(&I);
-                    llvm::CmpInst::Predicate pr=ICC->getSignedPredicate();
-                    Value* passop1 = I.getOperand(0);
-                    Value* passop2 = NULL;
-                    std::list<std::pair<llvm::Value*, llvm::Value*>> oppair = {std::make_pair(passop1, passop2)};
-                    switch(pr){
-                        case CmpInst::ICMP_EQ: errs() << "Second label is taken (corresponding to else path)" << "\n";
-                        relbranch.push_back({&BB, userOpcode, pr, oppair, 1, false});
-                        return 2;
-                        break;
-                        case CmpInst::ICMP_NE: errs() << "First label is taken (corresponding to if path)" << "\n";
-                        relbranch.push_back({&BB, userOpcode, pr, oppair, 1, true});
-                        return 1;
-                        break;
-                        default: errs() << "pointers have some other comparison operator" << "\n";
-                        return 0;
-                        break;
+                    else if (I.getOperand(1) == nullptr) {
+                        ICmpInst *ICC = dyn_cast<ICmpInst>(&I);
+                        llvm::CmpInst::Predicate pr=ICC->getSignedPredicate();
+                        Value* passop1 = I.getOperand(0);
+                        Value* passop2 = NULL;
+                        std::list<std::pair<llvm::Value*, llvm::Value*>> oppair = {std::make_pair(passop1, passop2)};
+                        switch(pr){
+                            case CmpInst::ICMP_EQ: errs() << "Second label is taken (corresponding to else path)" << "\n";
+                            relbranch.push_back({&BB, userOpcode, pr, oppair, 1, false});
+                            return 2;
+                            break;
+                            case CmpInst::ICMP_NE: errs() << "First label is taken (corresponding to if path)" << "\n";
+                            relbranch.push_back({&BB, userOpcode, pr, oppair, 1, true});
+                            return 1;
+                            break;
+                            default: errs() << "pointers have some other comparison operator" << "\n";
+                            return 0;
+                            break;
+                        }
                     }
                 }
             }
+            
         }        
     }
     errs() << "pointer heuristics are not used\n";
@@ -280,9 +443,13 @@ int loopHeuristic(BasicBlock &BB, llvm::LoopAnalysis::Result &li) {
 
 void runHeuristics(Function &F, llvm::LoopAnalysis::Result &li) {
     for (BasicBlock &BB : F) {
+        errs() << "in BB " << BB << "\n";
         pointerHeuristic(BB);
         loopHeuristic(BB, li);
         opcodeHeuristic(BB);
+        guardHeuristic(BB);
+        branchDirectionHeuristic(BB, li);
+
     }
     errs() << relbranch[0].heuristic << "\n";
         
@@ -304,67 +471,41 @@ BasicBlock* getMostLikely(BasicBlock* curr) {
     exit(0);
 }
 
-double getAccuracy(Function &F, llvm::BranchProbabilityAnalysis::Result &bpi, llvm::LoopAnalysis::Result &li) {
-    std::vector<llvm::BasicBlock *> freqPath;
-    for (Loop *L : li) {
-        BasicBlock *header = L->getHeader();
-        BasicBlock *latch = L->getLoopLatch();
-
-        BasicBlock *currblock = header;
-
-        while(currblock != latch){
-            freqPath.push_back(currblock);
-            for (BasicBlock *Succ: successors(currblock)) {
-                BranchProbability prob = bpi.getEdgeProbability(currblock, Succ);
-                uint64_t num = prob.getNumerator();
-                uint64_t den = prob.getDenominator();
-                double ratio = num/ static_cast<double>(den);
-                double comp = static_cast<double>(0.7999);
-                if (ratio >= comp) {
-                    currblock = Succ; //move to the next block on the frequent path
-                    break;
-                }
-            }
+double getAccuracy(Function &F, llvm::BranchProbabilityAnalysis::Result &bpi, llvm::LoopAnalysis::Result &li){
+    double stsum = 0;
+    double prsum = 0;
+    for (BasicBlock &BB : F) {
+        int count = 0;
+        for (BasicBlock *Succ: successors(&BB)) {
+            count += 1;
         }
-        freqPath.push_back(latch);
-    }
-
-    BasicBlock* pred = nullptr;
-    double sa_acc = 0, pr_acc = 0;
-    for (auto BB : freqPath) {
-        
-        if (pred != nullptr) {
-            
-            Instruction* inst = pred->getTerminator();
-            string opc = inst->getOpcodeName();
-            BranchProbability prob = bpi.getEdgeProbability(pred, BB);
-            uint64_t num = prob.getNumerator();
-            uint64_t den = prob.getDenominator();
-            double ratio = num/ static_cast<double>(den);
-            pr_acc = pr_acc + ratio;
-            if (ratio == 1) {
-                sa_acc = sa_acc + ratio;
+        if (count > 1) {
+            BasicBlock* succ1 = BB.getTerminator()->getSuccessor(0);
+            BasicBlock* succ2 = BB.getTerminator()->getSuccessor(1);
+            BranchProbability prob1 = bpi.getEdgeProbability(&BB, succ1);
+            BranchProbability prob2 = bpi.getEdgeProbability(&BB, succ2);
+            uint64_t num1 = prob1.getNumerator();
+            uint64_t den1 = prob1.getDenominator();
+            double ratio1 = num1/ static_cast<double>(den1);
+            uint64_t num2 = prob2.getNumerator();
+            uint64_t den2 = prob2.getDenominator();
+            double ratio2 = num2/ static_cast<double>(den2);
+            if (ratio1 > ratio2) {
+                prsum += ratio1;
             }
             else {
-                BasicBlock* succ = getMostLikely(pred);
-                if (succ == BB) {
-                    sa_acc = sa_acc + ratio;
-                }
-                else {
-                    BranchProbability prob1 = bpi.getEdgeProbability(pred, succ);
-                    uint64_t num1 = prob.getNumerator();
-                    uint64_t den1 = prob.getDenominator();
-                    double ratio1 = num1/ static_cast<double>(den1);
-                    sa_acc = sa_acc + ratio1;
-                }
+                prsum += ratio2;
             }
-            errs() << "here ratio" << ratio << "   " << *BB << "\n";
+            BasicBlock* mostLikely = getMostLikely(&BB);
+            if (mostLikely == succ1) {
+                stsum += ratio1;
+            }
+            else{
+                stsum += ratio2;
+            }
         }
-        
-        pred = BB;
-
     }
-    return sa_acc/pr_acc;
+    return stsum/prsum;
 }
 
 // --------------------------------------- the growTrace function -------------------------------------------------------
@@ -431,6 +572,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         llvm::LoopAnalysis::Result &li = FAM.getResult<LoopAnalysis>(F);
         DominatorTree dt = DominatorTree(F);
 
+        runHeuristics(F, li);
      
         std::list<Trace> traces;
         // ------------------------------------------ identifying loops ---------------------------------------------------------
@@ -574,6 +716,7 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
             for(BasicBlock* curr_bb : curr_trace){
                 if(curr_bb->hasNPredecessorsOrMore(2) && curr_bb != first_in_trace){
                     //if there is a block in the trace that has 2 or more predecessors, and it isn't the header, need to tail-duplicate
+            
                     auto trace_size = curr_trace.size();
                     auto curr_index = curr_trace.getBlockIndex(curr_bb);
                     errs() << "The length of the trace is: " << trace_size << " and the index is "<< curr_index <<"\n";
@@ -583,32 +726,46 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                     std::list<BasicBlock*> cloned_blocks; //create a stack of cloned blocks in trace, pushing and popping from back
                     for(int i=curr_index; i<trace_size; i++){ //for all of the blocks in the trace after the side entrance
                         BasicBlock* bb_to_clone = curr_trace.getBlock(i); 
-                        BasicBlock* cloned_bb = CloneBasicBlock(bb_to_clone, VMap);
-                        cloned_bb->insertInto(&F); //insert the cloned_bb into the function
-                        tail_list.push_back(cloned_bb);
-                        bb_to_clone_list.push_back(bb_to_clone);
-                        //errs() << "The cloned bb is: " << *cloned_bb <<"\n";
                         
-                        //need to change the predecessors of the bb_to_clone and the cloned_bb
-                        for(BasicBlock* pred : predecessors(bb_to_clone)){
-                            //if the basic block only has one predecessor, then it is the second/third/etc in the trace
-                            if(!bb_to_clone->hasNPredecessorsOrMore(2)){ 
-                                //need to connect cloned_bb as a successor of the previously cloned block
-                                BasicBlock* latest_clone = cloned_blocks.back();
-                                cloned_blocks.pop_back();
-                                Instruction* terminator = latest_clone->getTerminator();
-                                terminator->replaceSuccessorWith(bb_to_clone, cloned_bb);
-                                cloned_blocks.push_back(cloned_bb);
-                            }
-                            //if bb has more than one predecssor, one pred is in trace and should stay connected to bb_to_clone
-                                //but other pred not in trace and should renove connection to curr_bb and instead connect to cloned_bb
-                            else if(std::find(curr_trace.begin(), curr_trace.end(), pred) == curr_trace.end()){
-                                Instruction* terminator = pred->getTerminator();
-                                terminator->replaceSuccessorWith(bb_to_clone, cloned_bb);
-                                cloned_blocks.push_back(cloned_bb);
-                                errs() << "The cloned bb is now: " << *cloned_bb << "\n";
+                        //check if the BB has multiple predecessors but they are all in the trace
+                        bool needToClone = false;
+                        for(BasicBlock* parent : predecessors(bb_to_clone)){
+                            if(std::find(curr_trace.begin(), curr_trace.end(), parent) == curr_trace.end()){
+                                needToClone = true; //if there is a parent that is not in the trace, we need to clone
+                                errs() << "We need to clone: " << *bb_to_clone << "\n";
                             }
                         }
+                        if(needToClone){
+                            BasicBlock* cloned_bb = CloneBasicBlock(bb_to_clone, VMap);
+                            cloned_bb->insertInto(&F); //insert the cloned_bb into the function
+                            tail_list.push_back(cloned_bb);
+                            bb_to_clone_list.push_back(bb_to_clone);
+                            //errs() << "The cloned bb is: " << *cloned_bb <<"\n";
+                            
+                            //need to change the predecessors of the bb_to_clone and the cloned_bb
+                            for(BasicBlock* pred : predecessors(bb_to_clone)){ 
+                                //if the basic block only has one predecessor, then it is the second/third/etc in the trace
+                                if(!bb_to_clone->hasNPredecessorsOrMore(2)){ 
+                                    //need to connect cloned_bb as a successor of the previously cloned block
+                                    BasicBlock* latest_clone = cloned_blocks.back();
+                                    cloned_blocks.pop_back();
+                                    Instruction* terminator = latest_clone->getTerminator();
+                                    terminator->replaceSuccessorWith(bb_to_clone, cloned_bb);
+                                    cloned_blocks.push_back(cloned_bb);
+                                    errs() << "The cloned bb (only one pred) is now: " << *cloned_bb << "\n";
+                                }
+                                //if bb has more than one predecssor, one pred is in trace and should stay connected to bb_to_clone
+                                    //but other pred not in trace and should renove connection to curr_bb and instead connect to cloned_bb
+                                else if(std::find(curr_trace.begin(), curr_trace.end(), pred) == curr_trace.end()){
+                                    errs() << "We need to clone this multi pred block! " << *bb_to_clone << "\n";
+                                    Instruction* terminator = pred->getTerminator();
+                                    terminator->replaceSuccessorWith(bb_to_clone, cloned_bb);
+                                    cloned_blocks.push_back(cloned_bb);
+                                    errs() << "The cloned bb is now: " << *cloned_bb << "\n";
+                                }
+                            }
+                        }
+                        
                         //after cloning a basic block, need to fix up by adding phi nodes to the join point
                         //for every variable that is assigned in the bb_to_clone, need to add a phi in join point with vals from bb_to_clone and cloned_bb
                         
@@ -734,12 +891,11 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
         }
 
         //print out basic blocks
-        for (BasicBlock &BB : F){
-            errs() << "Basic Block: " << BB << "\n";
-        }
+        // for (BasicBlock &BB : F){
+        //     errs() << "Basic Block: " << BB << "\n";
+        // }
 
-        //-------------------------------------- Riya + Christina's pass code ---------------------------------------------------
-        runHeuristics(F, li);
+        //calculate accuracy compared to profile information
         double acc = getAccuracy(F, bpi, li);
         errs() << "Accuracy is: " << acc << "\n";
 
