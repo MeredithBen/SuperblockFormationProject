@@ -766,76 +766,13 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                             }
                         }
                         
-                        //after cloning a basic block, need to fix up by adding phi nodes to the join point
-                        //for every variable that is assigned in the bb_to_clone, need to add a phi in join point with vals from bb_to_clone and cloned_bb
-                        
-                        //the join point will be all of the the immediate successors of the last block that was pushed back into cloned_blocks
-                        // BasicBlock* last_cloned = cloned_blocks.back();
-                        // for(BasicBlock* join_point : successors(last_cloned)){
-                        
-                        //     errs() << "The join point is: " << *join_point << "\n";
-                        //     for(Instruction& bb_inst : *bb_to_clone){
-                        //         if(!bb_inst.getType()->isVoidTy()){
-                        //             //if the instruction returns something, then it must added to a phi_node at join point
-                        //             //then get the matching instruction from the cloned block
-                        //             for(Instruction& clone_inst : *cloned_bb){
-                        //                 if(clone_inst.isIdenticalTo(&bb_inst)){ //then we have our two instructions to use in phi node!
-                        //                     //cast instructions to values
-                        //                     Value* bb_inst_val = dyn_cast<Value>(&bb_inst);
-                        //                     Value* clone_inst_val = dyn_cast<Value>(&clone_inst);
-
-                        //                     //create phi node and insert it at join point
-                        //                     PHINode *phi = PHINode::Create(bb_inst_val->getType(), 0, Twine("phiNode"));
-                        //                     phi->insertBefore(join_point->getFirstNonPHI()); 
-
-                        //                     //add the two values along with their BBs to the phi node
-                        //                     phi->addIncoming(bb_inst_val, bb_to_clone);
-                        //                     phi->addIncoming(clone_inst_val, cloned_bb);
-            
-                        //                     //add instructions and phi nodes to vectors to later replace uses
-                        //                     usesToReplace.push_back(bb_inst_val);
-                        //                     phisToReplaceWith.push_back(phi);
-                        //                 }
-                        //             }
-                        //         }
-                        //     }
-
-                        // }
                     }
                     list_of_tail_lists.push_back(tail_list);
                     list_of_bb_to_clone_lists.push_back(bb_to_clone_list);
                 }
             }
         }
-        // for (int i=0; i<usesToReplace.size(); i++){
-        //     Value* use = usesToReplace[i];
-        //     Instruction* phi = phisToReplaceWith[i];
-        //     Value* phi_val = dyn_cast<Value>(phi);
-        //     BasicBlock* join_point = phi->getParent();
-
-
-        //     PHINode* phin = dyn_cast<PHINode>(phi);
-        //     errs() << "The phi val is complete: " << phin->isComplete() << "\n";
-        //     if(!phin->isComplete()){
-    
-        //         for(BasicBlock* par : predecessors(join_point)){
-        //             //Value* temp_val = phin->getIncomingValueForBlock(par);
-        //             for(int i=0; i<4; i++){
-        //                 int idx = phin->getBasicBlockIndex(par);
-        //                 if(idx == -1){ //if the parent basic block isn't in the phi, add incoming w/ dummy value
-        //                     // Type ty = phi_val->getType();
-        //                     // PointerType* pt_ty = PointerType::get(&ty);
-        //                     // ConstantPointerNull* v = ConstantPointerNull::get(pt_ty);
-        //                     Value* v = NULL; //can't assign a null value here
-        //                     phin->addIncoming(v, par);
-        //                     errs() << "Phi node is now " << *phin << "\n";
-        //                 }
-        //             }
-        //         }
-        //     }
-            
-        //     use->replaceUsesOutsideBlock(phi_val, join_point);
-        // }
+       
 
         // -------------------------------------- fixing up uses in duplicated tail ---------------------------------------------
         std::vector<User*> user_list;
@@ -875,7 +812,6 @@ struct SuperblockFormationPass : public PassInfoMixin<SuperblockFormationPass> {
                                         user_list.push_back(user);
                                         bb_inst_val_list.push_back(bb_inst_val);
                                         clone_inst_val_list.push_back(clone_inst_val);
-                                        //user->replaceUsesOfWith(bb_inst_val, clone_inst_val);
                                     }
 
                                 }
